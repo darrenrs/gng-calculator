@@ -1,0 +1,34 @@
+div#mineshaftTableContainer {
+  height: 80vh;
+}
+
+table.gng-mineshaft-table {
+  white-space: nowrap;
+  border-collapse: separate;  
+}
+
+/* header rows */
+table.gng-mineshaft-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+table.gng-mineshaft-table thead tr:nth-child(2) {
+  border-bottom: 2px var(--bs-table-hover-color) solid;
+}
+
+/* header column */
+table.gng-mineshaft-table tr:first-child th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 9;
+  border-right: 2px var(--bs-table-hover-color) solid;
+}
+
+table.gng-mineshaft-table tr td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 9;
+  border-right: 2px var(--bs-table-hover-color) solid;
+}

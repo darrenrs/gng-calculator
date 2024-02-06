@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GNG Mineshaft Table</title>
+  <link rel="stylesheet" href="css/bootstrap.min.css"/>
+  <link rel="stylesheet" href="css/sticky.css"/>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark p-3">
+    <a class="navbar-brand" href="#">GNG Mineshaft Table</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#balanceList" aria-controls="balanceList" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="balanceList">
+      <div class="navbar-nav">
+        <a class="nav-item nav-link" data-balance="evergreen" href="#evergreen">Evergreen</a>
+        <a class="nav-item nav-link" data-balance="arctic" href="#arctic">Arctic</a>
+        <a class="nav-item nav-link" data-balance="candy" href="#candy">Candy</a>
+        <a class="nav-item nav-link" data-balance="christmas" href="#christmas">Christmas</a>
+        <a class="nav-item nav-link" data-balance="easter" href="#easter">Easter</a>
+        <a class="nav-item nav-link" data-balance="halloween" href="#halloween">Halloween</a>
+        <a class="nav-item nav-link" data-balance="harvest" href="#harvest">Harvest</a>
+        <a class="nav-item nav-link" data-balance="jungle" href="#jungle">Jungle</a>
+        <a class="nav-item nav-link" data-balance="minicard" href="#minicard">Minicard</a>
+        <a class="nav-item nav-link" data-balance="minielixir" href="#minielixir">Minielixir</a>
+        <a class="nav-item nav-link" data-balance="minigem" href="#minigem">Minigem</a>
+        <a class="nav-item nav-link" data-balance="summer" href="#summer">Summer</a>
+        <a class="nav-item nav-link" data-balance="valentine" href="#valentine">Valentine</a>
+        <a class="nav-item nav-link" data-balance="volcano" href="#volcano">Volcano</a>
+      </div>
+    </div>
+  </nav>
+  <span id="errorText" class="d-none text-danger"></span>
+  <div id="mineshaftTableContainer" style="overflow-x: scroll;"></div>
+  <p class="p-3">&copy; 2024 Darren R. Skidmore : <a href="https://github.com/darrenrs/gng-calculator">GitHub</a></p>
+  <script src="js/bootstrap.min.js"></script>
+  <script src="js/script.js"></script>
+</body>
+</html>

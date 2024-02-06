@@ -1,0 +1,16 @@
+# device-specific
+.DS_Store
+Thumbs.db
+nohup.out
+*.old
+.vscode/
+
+# Node-specific
+*.log
+node_modules/
+build/
+
+# config/db
+.env
+gc-auth-body.json
+balance/*
