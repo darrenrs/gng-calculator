@@ -133,19 +133,25 @@ const processData = (data) => {
       const j = data[jx];
       const price = document.createElement('td');
       const multiplier = document.createElement('td');
-
-      if (levelsProcessed[jx] + j["CountPerObjective"][objectivesProcessed[jx]] !== i) {
+      
+      if (levelsProcessed[jx] + j["CountPerObjective"][objectivesProcessed[jx]] !== i || levelsProcessed[jx] + j["CountPerObjective"][objectivesProcessed[jx]] > j["CostPerLevel"].length) {
         price.innerText = '-';
         multiplier.innerText = '-';
       } else {
         const priceActual = j["CostPerLevel"].slice(i - j["CountPerObjective"][1], i).reduce((partialSum, a) => partialSum + a, 0);
-        price.innerText = numberFormat(priceActual);
+        
+        if (isNaN(priceActual) || priceActual === Infinity) {
+          price.innerText = '-';
+          multiplier.innerText = '-';
+        } else {
+          price.innerText = numberFormat(priceActual);
 
-        const multiplierActual = j["MultiplierPerObjective"][parseInt((i - j["CountPerObjective"][objectivesProcessed[jx]]) / j["CountPerObjective"][objectivesProcessed[jx]])]
-        multiplier.innerText = multiplierActual.toLocaleString();
+          const multiplierActual = j["MultiplierPerObjective"][objectivesProcessed[jx]];
+          multiplier.innerText = multiplierActual.toLocaleString();
 
-        if (multiplierActual > 100) {
-          multiplier.classList.add('table-warning');
+          if (multiplierActual > 100) {
+            multiplier.classList.add('table-warning');
+          }
         }
 
         levelsProcessed[jx] += j["CountPerObjective"][objectivesProcessed[jx]];
@@ -184,7 +190,7 @@ const numberFormat = (n) => {
   if (typeof n !== 'number') {
     return NaN;
   } else if (n < 1e+5) {
-    return parseInt((n.toFixed(0))).toLocaleString();
+    return parseInt((Math.floor(n).toFixed(0))).toLocaleString();
   }
 
   let b1000 = Math.floor(Math.log(n) / Math.log(1000)); // power of 1000 needed to represent the number
