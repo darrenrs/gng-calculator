@@ -194,7 +194,7 @@ const numberFormat = (n) => {
   }
 
   let b1000 = Math.floor(Math.log(n) / Math.log(1000)); // power of 1000 needed to represent the number
-  let b1000_formatted = (n / Math.pow(1000, b1000)).toFixed(2);
+  let b1000_formatted = (Math.floor((n / Math.pow(1000, b1000)).toFixed(4) * 100)/100).toFixed(2);
 
   const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   const b1000_override = [
