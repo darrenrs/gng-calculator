@@ -12,5 +12,4 @@ build/
 
 # config/db
 .env
-gc-auth-body.json
 balance/*
