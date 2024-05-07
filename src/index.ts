@@ -2,17 +2,36 @@ import express, { Express, Request, Response } from "express";
 import dotenv from "dotenv";
 import { readFile } from "fs/promises";
 import { Mineshaft } from './mineshaft';
+import { readdir } from "fs";
 
 dotenv.config();
 
 const app: Express = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3001;
 
 app.use(express.static('public', {extensions: ['html']}));
 app.use(express.static(__dirname + '/../node_modules/bootstrap/dist'));
 
 app.get("/api/event/all", async (req: Request, res: Response) => {
-  res.sendStatus(501);
+  // return all eventids from balance folder
+  const path = 'balance';
+  
+  try {
+    const files = await new Promise<string[]>((resolve, reject) => {
+      readdir(path, (err, files) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(files);
+        }
+      });
+    });
+    const eventIds = files.map(file => file.replace('balance_', '').replace('.json', ''));
+    res.json(eventIds);
+  } catch {
+    res.sendStatus(404);
+    return;
+  }
 });
 
 app.get("/api/event/schedule", async (req: Request, res: Response) => {
