@@ -1,6 +1,33 @@
 const FALLBACK_BALANCE_ID = 'evergreen';
+const get_balance_ids = async () => {
+  return await fetch('api/event/all')
+    .then(async (response) => {
+      if (response.status === 200) {
+        const data = await response.json()
+        return {
+          "status": true,
+          "content": data
+        };
+      } else {
+        console.error(`Server error (${response.status})`);
+        return {
+          "status": false,
+          "content": response.status
+        };
+      }
+    }
+    )
+    .catch((error) => {
+      console.error(error);
+      return {
+        "status": false,
+        "content": "Unknown"
+      };
+    }
+    )
+}
 
-const loadBalance = async(balanceId) => {
+const loadBalance = async (balanceId) => {
   // immediately set fallback if NULL
   if (!balanceId) {
     balanceId = FALLBACK_BALANCE_ID;
@@ -31,7 +58,7 @@ const loadBalance = async(balanceId) => {
   document.querySelector('#errorText').classList.remove('d-none');
 }
 
-const getMineshafts = async(balanceId) => {
+const getMineshafts = async (balanceId) => {
   return await fetch(`api/mineshaft?balance=${balanceId}`)
     .then(async (response) => {
       if (response.status === 200) {
@@ -82,7 +109,7 @@ const processData = (data) => {
       maximumTableLength = i["CostPerLevel"].length;
     }
   }
-  
+
   const table = document.createElement('table');
   table.classList.add('table', 'table-striped', 'small', 'gng-mineshaft-table');
 
@@ -133,13 +160,13 @@ const processData = (data) => {
       const j = data[jx];
       const price = document.createElement('td');
       const multiplier = document.createElement('td');
-      
+
       if (levelsProcessed[jx] + j["CountPerObjective"][objectivesProcessed[jx]] !== i || levelsProcessed[jx] + j["CountPerObjective"][objectivesProcessed[jx]] > j["CostPerLevel"].length) {
         price.innerText = '-';
         multiplier.innerText = '-';
       } else {
         const priceActual = j["CostPerLevel"].slice(i - j["CountPerObjective"][1], i).reduce((partialSum, a) => partialSum + a, 0);
-        
+
         if (isNaN(priceActual) || priceActual === Infinity) {
           price.innerText = '-';
           multiplier.innerText = '-';
@@ -194,7 +221,7 @@ const numberFormat = (n) => {
   }
 
   let b1000 = Math.floor(Math.log(n) / Math.log(1000)); // power of 1000 needed to represent the number
-  let b1000_formatted = (Math.floor((n / Math.pow(1000, b1000)).toFixed(4) * 100)/100).toFixed(2);
+  let b1000_formatted = (Math.floor((n / Math.pow(1000, b1000)).toFixed(4) * 100) / 100).toFixed(2);
 
   const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   const b1000_override = [
@@ -224,4 +251,19 @@ window.addEventListener('hashchange', () => {
 window.addEventListener('load', async () => {
   const fragment = window.location.hash.substring(1);
   loadBalance(fragment);
+  get_balance_ids().then((data) => {
+    if (data["status"]) {
+      for (let i of data["content"]) {
+        const li = document.createElement('li');
+        li.classList.add('nav-item');
+        li.setAttribute('data-balance', i);
+        li.innerHTML = `<a class="nav-link" href="#${i}">${i.charAt(0).toUpperCase() + i.slice(1)}</a>`;
+        document.querySelector('.navbar-nav').appendChild(li);
+      }
+    } else {
+      document.querySelector('#errorText').innerText = `${data["content"]} error`;
+      document.querySelector('#errorText').classList.remove('d-none');
+    }
+  }
+  );
 });
