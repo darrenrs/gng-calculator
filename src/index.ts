@@ -27,7 +27,11 @@ app.get("/api/event/all", async (req: Request, res: Response) => {
       });
     });
     const eventIds = files.map(file => file.replace('balance_', '').replace('.json', ''));
-    res.json(eventIds);
+    const evergreenIndex = eventIds.indexOf('evergreen');
+    eventIds.splice(evergreenIndex, 1);
+    const eventIdsEvergreenFirst = ['evergreen', ...eventIds];
+
+    res.json(eventIdsEvergreenFirst);
   } catch {
     res.sendStatus(404);
     return;

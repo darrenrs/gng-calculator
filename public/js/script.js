@@ -177,7 +177,7 @@ const processData = (data) => {
           multiplier.innerText = multiplierActual.toLocaleString();
 
           if (multiplierActual > 100) {
-            multiplier.classList.add('table-warning');
+            multiplier.classList.add('bg-danger');
           }
         }
 
@@ -206,9 +206,9 @@ const processData = (data) => {
 const selectBalanceIdNavbar = (balanceId) => {
   for (let i of document.querySelectorAll('.nav-item')) {
     if (i.getAttribute('data-balance') === balanceId) {
-      i.classList.add('active');
+      i.children[0].classList.add('active');
     } else {
-      i.classList.remove('active');
+      i.children[0].classList.remove('active');
     }
   }
 }
@@ -260,6 +260,9 @@ window.addEventListener('load', async () => {
         li.innerHTML = `<a class="nav-link" href="#${i}">${i.charAt(0).toUpperCase() + i.slice(1)}</a>`;
         document.querySelector('.navbar-nav').appendChild(li);
       }
+
+      // the navbar might not be ready before the highlighter loads 
+      selectBalanceIdNavbar(fragment);
     } else {
       document.querySelector('#errorText').innerText = `${data["content"]} error`;
       document.querySelector('#errorText').classList.remove('d-none');
