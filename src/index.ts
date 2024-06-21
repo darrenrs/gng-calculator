@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from "express";
 import dotenv from "dotenv";
 import { readFile } from "fs/promises";
 import { Mineshaft } from './mineshaft';
+import { Gacha, GachaChest, Zone, ZoneMultiplier } from './gacha';
 import { readdir } from "fs";
 
 dotenv.config();
@@ -129,6 +130,90 @@ app.get("/api/mineshaft", async (req: Request, res: Response) => {
       return_data.push(current_shaft);
     }
 
+    res.json(return_data);
+  } catch {
+    res.sendStatus(404);
+    return;
+  }
+});
+
+app.get("/api/gacha-reward", async (req: Request, res: Response) => {
+  if (!req.query.balance || typeof req.query.balance !== 'string') {
+    res.sendStatus(400);
+    return;
+  }
+
+  const balance_id: string = req.query.balance;
+
+  try {
+    const json_data = JSON.parse(await readFile(`balance/balance_${balance_id}.json`, "utf8"));
+
+    const gachaChests : GachaChest[] = [];
+
+    // populate Gacha
+    for (let gacha of json_data.Gacha) {
+      const isScripted = gacha.GuaranteedCardIds.length > 0;
+      const gachaChest : GachaChest = {
+        Id: gacha.Id,
+        IsScripted: isScripted,
+        SoftCurrencyMin: gacha.SoftCurrencyMin,
+        SoftCurrencyMax: gacha.SoftCurrencyMax,
+        LeaderboardCurrency: gacha.LeaderboardCurrency,
+        BaseNumCards: gacha.BaseNumCards,
+        UncommonWeight: gacha.UncommonWeight,
+        RareWeight: gacha.RareWeight,
+        LegendaryWeight: gacha.LegendaryWeight,
+        EventEpicWeight: gacha.EventEpicWeight
+      }
+      
+      // don't want Scripted currently, but maybe in the future
+      if (isScripted) {
+        continue;
+      }
+
+      gachaChests.push(gachaChest);
+    }
+
+    const zones : Zone[] = [];
+
+    for (let zone of json_data.Zones) {
+      const zoneMultipliers : ZoneMultiplier[] = [];
+
+      // index this one
+      for (let zoneMultiplier in zone.RankMultipliers) {
+        const zoneMultiplierDataFile = zone.RankMultipliers[zoneMultiplier];
+        const zoneMultiplierObj : ZoneMultiplier = {
+          Id: zoneMultiplier,
+          GachaCardsMultNormal: zoneMultiplierDataFile.GachaCardsMultNormal,
+          GachaCardsMultPremium: zoneMultiplierDataFile.GachaCardsMultPremium,
+          GachaCardsMultRare: zoneMultiplierDataFile.GachaCardsMultRare,
+          GachaLeaderboardCurrencyMultNormal: zoneMultiplierDataFile.GachaLeaderboardCurrencyMultNormal,
+          GachaLeaderboardCurrencyMultPremium: zoneMultiplierDataFile.GachaLeaderboardCurrencyMultPremium,
+          GachaLeaderboardCurrencyMultRare: zoneMultiplierDataFile.GachaLeaderboardCurrencyMultRare,
+          GachaSoftCurrencyMultNormal: zoneMultiplierDataFile.GachaSoftCurrencyMultNormal,
+          GachaSoftCurrencyMultPremium: zoneMultiplierDataFile.GachaSoftCurrencyMultPremium,
+          GachaSoftCurrencyMultRare: zoneMultiplierDataFile.GachaSoftCurrencyMultRare,
+          GenObjectiveSoftCurrencyMultiplier: zoneMultiplierDataFile.GeneratorId,
+          MiningLeaderboardCurrencyMultiplier: zoneMultiplierDataFile.MiningLeaderboardCurrencyMultiplier,
+          MiningSoftCurrencyMultiplier: zoneMultiplierDataFile.MiningSoftCurrencyMultiplier,
+        }
+        
+        zoneMultipliers.push(zoneMultiplierObj);
+      }
+
+      const zoneObj : Zone = {
+        Id: zone.Id,
+        SubZones: zoneMultipliers
+      }
+
+      zones.push(zoneObj);
+    }
+
+    const return_data : Gacha = {
+      GachaChests: gachaChests,
+      Zones: zones
+    }
+    
     res.json(return_data);
   } catch {
     res.sendStatus(404);
