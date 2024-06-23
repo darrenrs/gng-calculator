@@ -1,4 +1,8 @@
-div#mineshaftTableContainer {
+div#tableContainer {
+  overflow-x: scroll;
+}
+
+div.containerFull, div.containerWithInput {
   height: 80vh;
 }
 
@@ -31,4 +35,16 @@ table.gng-mineshaft-table tr td:first-child {
   left: 0;
   z-index: 9;
   border-right: 2px var(--bs-table-hover-color) solid;
+}
+
+@media (max-width: 480px) {
+  div.containerWithInput {
+    height: 75vh;
+  }
+}
+
+@media (min-width: 720px) {
+  div.containerWithInput {
+    height: 70vh;
+  }
 }

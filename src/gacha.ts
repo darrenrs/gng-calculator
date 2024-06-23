@@ -12,6 +12,7 @@ export interface Gacha {
 export interface GachaChest {
   Id: string;
   IsScripted: boolean;
+  GachaType: number;
   SoftCurrencyMin: number;
   SoftCurrencyMax: number;
   LeaderboardCurrency: number;

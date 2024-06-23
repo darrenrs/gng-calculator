@@ -156,6 +156,7 @@ app.get("/api/gacha-reward", async (req: Request, res: Response) => {
       const gachaChest : GachaChest = {
         Id: gacha.Id,
         IsScripted: isScripted,
+        GachaType: gacha.GachaType,
         SoftCurrencyMin: gacha.SoftCurrencyMin,
         SoftCurrencyMax: gacha.SoftCurrencyMax,
         LeaderboardCurrency: gacha.LeaderboardCurrency,

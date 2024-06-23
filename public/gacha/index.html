@@ -21,9 +21,42 @@
       </div>
     </nav>
     <span id="errorText" class="d-none text-danger"></span>
-    <div id="mineshaftTableContainer" style="overflow-x: scroll;"></div>
+    <div class="container" id="inputFields">
+      <div class="row">
+        <div class="col-4">
+          <label for="zoneId">Zone ID</label>
+          <select class="form-select" id="zoneId"></select>
+        </div>
+        <div class="col-4">
+          <label for="subzoneId">Walls+Shafts Open</label>
+          <select class="form-select" id="subzoneId"></select>
+        </div>
+        <div class="col-3">
+          <label for="cardIncreaseRareLvl">Cards+ Lvl</label>
+          <select class="form-select" id="cardIncreaseRareLvl">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+          </select>
+        </div>
+        <div class="col-1">
+          <div id="statusSuccess" class="text-success display-4 d-none">&check;</div>
+          <div id="statusFailure" class="text-danger display-4 d-none">&cross;</div>
+        </div>
+      </div>
+    </div>
+    <div id="tableContainer" class="containerWithInput"></div>
+    <!-- <div id="inactiveTables" class="d-none"></div> -->
     <p class="p-3">&copy; 2024 Darren R. Skidmore : <a href="https://github.com/darrenrs/gng-calculator">GitHub</a> : <a href="/">Mineshaft Table</a></p>
-    <script src="js/bootstrap.min.js"></script>
-    <script src="js/script.js"></script>
+    <script src="../js/bootstrap.min.js"></script>
+    <script src="../js/gacha.js"></script>
+    <script src="../js/main.js"></script>
   </body>
 </html>
