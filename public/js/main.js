@@ -1,6 +1,17 @@
 const FALLBACK_BALANCE_ID = 'evergreen';
+
+// Basic check, can't really do much more because it's a public file
+const getApiBaseUrl = () => {
+  if (window.location.hostname === 'localhost') {
+    return '/api';
+  }
+  
+  return 'https://darrenskidmore.com/gng-calculator/api';
+};
+const apiUrl = getApiBaseUrl();
+
 const get_balance_ids = async () => {
-  return await fetch('/api/event/all')
+  return await fetch(`${apiUrl}/event/all`)
     .then(async (response) => {
       if (response.status === 200) {
         const data = await response.json()
@@ -59,7 +70,7 @@ const loadBalance = async (balanceId) => {
 }
 
 const getData = async (balanceId) => {
-  return await fetch(`/api/${endpointId}?balance=${balanceId}`)
+  return await fetch(`${apiUrl}/${endpointId}?balance=${balanceId}`)
     .then(async (response) => {
       if (response.status === 200) {
         const content = await response.json()
