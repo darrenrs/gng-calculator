@@ -50,7 +50,7 @@ for i in assetbundles_fname:
     if obj.type.name == "TextAsset":
       data = obj.read()
       with open(f"balance/balance_{i[0]}.json", 'w') as f:
-        f.write(data.text)
+        f.write(data.m_Script)
 
 # Stage IV: delete assetbundles (as they are only temp)
 for i in assetbundles_urls:
