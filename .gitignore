@@ -1,14 +1,21 @@
-# device-specific
+# temp/cache files
 .DS_Store
 Thumbs.db
-nohup.out
-*.old
 .vscode/
+*.old
 
-# Node-specific
-*.log
+# Node
 node_modules/
 build/
+dist/
+
+# Python
+.venv/
+__pycache__/
+
+# logs
+nohup.out
+*.log
 
 # config/db
 .env

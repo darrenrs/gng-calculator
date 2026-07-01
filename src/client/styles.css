@@ -1,0 +1,105 @@
+div#tableContainer {
+  overflow-x: scroll;
+}
+
+.gng-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.gng-balance-panel {
+  max-height: min(80vh, 720px);
+  overflow: auto;
+  position: sticky;
+  top: 64px;
+  z-index: 20;
+}
+
+.gng-scroll-pane {
+  max-height: 72vh;
+  overflow: auto;
+}
+
+.gng-map-table {
+  table-layout: fixed;
+}
+
+.gng-map-table td {
+  font-family: monospace;
+  font-size: 10px;
+  height: 2.25rem;
+  min-width: 8rem;
+  white-space: nowrap;
+}
+
+.gng-level-cell {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  min-width: 8rem;
+}
+
+.gng-level-cell input {
+  max-width: 6rem;
+}
+
+.gng-json-box {
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 4px;
+  min-height: 18rem;
+  overflow: auto;
+  padding: 1rem;
+}
+
+div.containerFull,
+div.containerWithInput {
+  height: 80vh;
+}
+
+table.gng-mineshaft-table {
+  white-space: nowrap;
+  border-collapse: separate;
+}
+
+table.gng-mineshaft-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+table.gng-mineshaft-table thead tr:nth-child(2) {
+  border-bottom: 2px var(--bs-table-hover-color) solid;
+}
+
+table.gng-mineshaft-table tr:first-child th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 9;
+  border-right: 2px var(--bs-table-hover-color) solid;
+}
+
+table.gng-mineshaft-table tr td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 9;
+  border-right: 2px var(--bs-table-hover-color) solid;
+}
+
+@media (max-width: 480px) {
+  .gng-balance-panel {
+    height: calc(100vh - 64px);
+    max-height: none;
+  }
+
+  div.containerWithInput {
+    height: 75vh;
+  }
+}
+
+@media (min-width: 720px) {
+  div.containerWithInput {
+    height: 70vh;
+  }
+}

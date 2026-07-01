@@ -1,0 +1,52 @@
+{
+  "AuthenticationContext": null,
+  "CreateAccount": false,
+  "CustomTags": null,
+  "DeviceId": null,
+  "DeviceModel": null,
+  "EncryptedRequest": null,
+  "InfoRequestParameters": {
+    "GetCharacterInventories": false,
+    "GetCharacterList": false,
+    "GetPlayerProfile": true,
+    "GetPlayerStatistics": false,
+    "GetTitleData": true,
+    "GetUserAccountInfo": false,
+    "GetUserData": true,
+    "GetUserInventory": false,
+    "GetUserReadOnlyData": true,
+    "GetUserVirtualCurrency": false,
+    "PlayerStatisticNames": null,
+    "ProfileConstraints": {
+      "ShowAvatarUrl": false,
+      "ShowBannedUntil": false,
+      "ShowCampaignAttributions": false,
+      "ShowContactEmailAddresses": false,
+      "ShowCreated": true,
+      "ShowDisplayName": false,
+      "ShowExperimentVariants": false,
+      "ShowLastLogin": false,
+      "ShowLinkedAccounts": false,
+      "ShowLocations": true,
+      "ShowMemberships": false,
+      "ShowOrigination": false,
+      "ShowPushNotificationRegistrations": false,
+      "ShowStatistics": false,
+      "ShowTags": false,
+      "ShowTotalValueToDateInUsd": false,
+      "ShowValuesToDate": false
+    },
+    "TitleDataKeys": [
+      "AssetBundleInfos_[VERSION]",
+      "LteSchedule_[VERSION]",
+      "Flags",
+      "MinVersion",
+      "AbData_[VERSION]"
+    ],
+    "UserDataKeys": null,
+    "UserReadOnlyDataKeys": null
+  },
+  "OS": null,
+  "PlayerSecret": null,
+  "TitleId": "8b9b7"
+}

@@ -1,23 +1,39 @@
-# Gold and Goblins Mineshaft Table
+# Gold and Goblins Calculator
 
-Very basic Node/TypeScript server that displays G&G Mineshaft data along with a Python script to automatically collect game balances (iOS logins only.) This may become a more robust calculator later on down the line.
+Node/TypeScript server with a React/Vite frontend for a Gold & Goblins calculator app. Currently displays the map (Read-only), mineshafts list, cards list, chest list, and scaffolding for save loader.
 
 ## Setup
 
-To set this up, you need a `gc-auth-body.json` and `.env` file. The `gc-auth-body.json` file is a bare template for the request that is sent to PlayFab. Note that due to technical limitations this only appears to work for iOS devices; it may be possible to authenticate using an Android device (via Google Play) but this has not yet been explored.
+Make a copy of `.env.example` -> `.env` and populate the values. The only required value is to specify one of `IOS_DEVICE_ID` or `ANDROID_DEVICE_ID`.
 
-The structure of the `.env` file is as follows:
+## Development
 
-```
-PORT=
-TITLE_ID=8b9b7
-GC_AUTH_ID=
-GAME_VER=
+```sh
+npm install
+npm run dev
 ```
 
-Fill in the parameters with the
-* Port (probably 3000)
-* Game Center authentication ID (the login ID you see via mitmproxy or similar software)
-* Game version (in the format x.y.z)
+The Vite frontend runs on `http://localhost:5173/` and proxies API calls to the Express server. The Express server uses `PORT` from `.env`.
 
-Should everything be correctly populated, there will not be any issues extracting the data using the Python script. From there, the actual node server will draw upon the locally stored data.
+## Build
+
+```sh
+npm run build
+npm start
+```
+
+The frontend builds to `dist/`, and the server builds to `build/server/`.
+
+## Project Structure
+
+```text
+src/server/   Express API and server entry point
+src/client/   React frontend
+scripts/      Balance update scripts
+public/       Static assets copied by Vite
+```
+
+## Version
+
+Beta 0.2 (2026-06-30)
+(C) 2024-26 Darren R. Skidmore
