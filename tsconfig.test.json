@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": ".tmp/spec2-tests",
+    "rootDir": ".",
+    "noEmit": false
+  },
+  "include": ["src/client/game/**/*.ts", "tests/**/*.ts"]
+}

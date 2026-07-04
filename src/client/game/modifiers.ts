@@ -5,6 +5,7 @@ export type ModifierInput = {
   ModifierGrowth: number;
 };
 
+// Modifiers for 14, 17, 18 exist in game code but are not seen anywhere
 export const STAT_MODIFIER_LOCALIZATION_KEYS: Record<number, string> = {
   1: "statbonus.minerunitcapaddition.name.long",
   2: "statbonus.reinforcementscostdivider.name",
@@ -32,6 +33,10 @@ export const STAT_MODIFIER_LOCALIZATION_KEYS: Record<number, string> = {
   27: "statbonus.AncestralPowerMult.name.long",
 };
 
+// These have not been 100% proven correct because some StatModifierTypes are
+// associated with "zero" values in balance data that may or may not be included
+// in the actual formulae. Existing test cases do not reflect all theoretical
+// combinations of values and focus only on those that appear in practice.
 export function calculateStatModifier(
   input: ModifierInput,
   level: number,

@@ -3,6 +3,7 @@
 Thumbs.db
 .vscode/
 *.old
+.tmp/
 
 # Node
 node_modules/
@@ -20,3 +21,4 @@ nohup.out
 # config/db
 .env
 balance/*
+gng-save.proto

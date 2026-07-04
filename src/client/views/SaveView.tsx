@@ -35,7 +35,9 @@ export function SaveView() {
             className="form-select"
             id="savePlatform"
             value={platform}
-            onChange={(event) => setPlatform(event.target.value as "ios" | "android")}
+            onChange={(event) =>
+              setPlatform(event.target.value as "ios" | "android")
+            }
           >
             <option value="ios">iOS</option>
             <option value="android">Android</option>

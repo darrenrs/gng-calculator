@@ -1,56 +1,53 @@
-import type { Balance } from "../game/sourceTypes";
+import type { MapDisplayCell, MapProjection } from "../game/derivedTypes";
 
-export function MapView({
-  balance,
-  selectedZoneId,
-  onSelectedZoneIdChange,
-}: {
-  balance: Balance;
-  selectedZoneId: string;
-  onSelectedZoneIdChange: (zoneId: string) => void;
-}) {
-  const selectedZone = balance.Zones.find((zone) => zone.Id === selectedZoneId) ?? balance.Zones[0];
-  const cells = selectedZone?.Grid.split(",") ?? [];
-  const rows = [];
-
-  for (let index = 0; index < cells.length; index += 7) {
-    rows.push(cells.slice(index, index + 7));
-  }
+export function MapView({ map }: { map: MapProjection }) {
+  const baseCells = map.displayRows.flat();
+  const objectCells = baseCells.filter(
+    (cell) => cell.kind !== "empty" && !cell.hidden,
+  );
 
   return (
     <div className="p-3">
-      <div className="row g-2 align-items-end mb-3">
-        <div className="col-sm-4 col-lg-3">
-          <label className="form-label" htmlFor="zoneSelect">
-            Map
-          </label>
-          <select
-            className="form-select"
-            id="zoneSelect"
-            value={selectedZone?.Id ?? ""}
-            onChange={(event) => onSelectedZoneIdChange(event.target.value)}
-          >
-            {balance.Zones.map((zone) => (
-              <option key={zone.Id} value={zone.Id}>
-                {zone.Id}
-              </option>
-            ))}
-          </select>
+      <div className="gng-map-scroll">
+        <div
+          className="gng-map-grid"
+          style={{
+            gridTemplateColumns: `repeat(${map.columnCount}, var(--gng-map-cell-size))`,
+            gridTemplateRows: `repeat(${map.rowCount}, var(--gng-map-cell-size))`,
+          }}
+        >
+          {baseCells.map((cell) => (
+            <div
+              aria-hidden="true"
+              className="gng-map-base-cell"
+              key={`base-${cell.key}`}
+              style={{
+                gridColumn: cell.col + 1,
+                gridRow: cell.row + 1,
+              }}
+            />
+          ))}
+          {objectCells.map((cell) => (
+            <MapObject cell={cell} key={cell.key} />
+          ))}
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div className="table-responsive gng-scroll-pane">
-        <table className="table table-bordered table-sm align-middle gng-map-table">
-          <tbody>
-            {rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                {row.map((cell, cellIndex) => (
-                  <td key={`${rowIndex}-${cellIndex}`}>{cell === "." ? "" : cell}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+function MapObject({ cell }: { cell: MapDisplayCell }) {
+  return (
+    <div
+      className={`gng-map-object gng-map-object-${cell.kind}`}
+      style={{
+        gridColumn: `${cell.gridColumnStart} / span ${cell.colSpan}`,
+        gridRow: `${cell.gridRowStart} / span ${cell.rowSpan}`,
+      }}
+    >
+      <div className="gng-map-object-content">
+        {cell.label && <strong>{cell.label}</strong>}
+        {cell.detail && <span>{cell.detail}</span>}
       </div>
     </div>
   );

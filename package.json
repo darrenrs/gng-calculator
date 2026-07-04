@@ -8,9 +8,12 @@
     "build:client": "vite build",
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:client\"",
     "dev:client": "vite",
-    "dev:api": "uvicorn src.server.main:app --reload --port 8000",
-    "start": "uvicorn src.server.main:app --host 0.0.0.0 --port 8000",
-    "balances:update": "python3 scripts/get-balances.py"
+    "dev:api": "API_RELOAD=1 .venv/bin/python -m src.server.main",
+    "start": "API_HOST=0.0.0.0 .venv/bin/python -m src.server.main",
+    "test": "node scripts/run-ts-tests.mjs",
+    "balances:update": "python3 scripts/get-balances.py",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "keywords": [],
   "author": "Darren R. Skidmore",
@@ -27,6 +30,7 @@
     "@types/node": "^20.11.16",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "prettier": "^3.9.4",
     "typescript": "^5.3.3"
   }
 }

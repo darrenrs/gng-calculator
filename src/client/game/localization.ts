@@ -28,5 +28,11 @@ export function lookupLocalization(
   key: string,
   fallback = key,
 ): string {
+  if (key === "theme.space1.name") {
+    return "Space (Left)";
+  }
+  if (key === "theme.space2.name") {
+    return "Space (Right)";
+  }
   return values[key] ?? fallback;
 }

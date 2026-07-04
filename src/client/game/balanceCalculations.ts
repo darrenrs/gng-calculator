@@ -6,22 +6,32 @@ export function sortedCards(balance: Balance): Card[] {
 }
 
 export function maxCardLevel(balance: Balance, card: Card): number {
-  const cost = balance.CardUpgradeCosts.find((item) => item.Rarity === card.Rarity);
+  const cost = balance.CardUpgradeCosts.find(
+    (item) => item.Rarity === card.Rarity,
+  );
   return cost ? cost.Duplicates.length + 1 : 1;
 }
 
-export function getGenerators(balance: Balance): Array<{ id: string; source: MineShaft }> {
+export function getGenerators(
+  balance: Balance,
+): Array<{ id: string; source: MineShaft }> {
   const spawningCart = balance.SpawningCart[0]
     ? [{ id: "spawningcart", source: balance.SpawningCart[0] }]
     : [];
 
   return [
     ...spawningCart,
-    ...balance.MineShafts.map((source) => ({ id: source.Id ?? "unknown", source })),
+    ...balance.MineShafts.map((source) => ({
+      id: source.Id ?? "unknown",
+      source,
+    })),
   ];
 }
 
-export function managerCardsForGenerator(balance: Balance, generatorId: string): Card[] {
+export function managerCardsForGenerator(
+  balance: Balance,
+  generatorId: string,
+): Card[] {
   return sortedCards(balance).filter(
     (card) => card.IsManager && card.TargetIds[0] === generatorId,
   );
@@ -108,7 +118,8 @@ export function generatorUpgradeCostToNextObjective(
     if (level < endLevel) {
       let total = 0;
       for (let current = level; current < endLevel; current++) {
-        total += source.UpgradeCostBase * source.UpgradeCostGrowth ** (current - 1);
+        total +=
+          source.UpgradeCostBase * source.UpgradeCostGrowth ** (current - 1);
       }
       return total;
     }
@@ -139,15 +150,18 @@ export function generatorIncome(
       }
       return total * value;
     }, 1);
-  const checkpointMultiplier = checkpointModifier(balance, 10, checkpointCount) || 1;
+  const checkpointMultiplier =
+    checkpointModifier(balance, 10, checkpointCount) || 1;
   const speedReduction =
     globalCards
       .filter((card) => card.StatModifierType === 15)
       .reduce(
-        (total, card) => total + calculateStatModifier(card, cardLevels[card.Id] ?? 0),
+        (total, card) =>
+          total + calculateStatModifier(card, cardLevels[card.Id] ?? 0),
         0,
       ) + checkpointModifier(balance, 15, checkpointCount);
-  const cycleSeconds = source.GenerationDelaySecBase * Math.max(0, 1 - speedReduction);
+  const cycleSeconds =
+    source.GenerationDelaySecBase * Math.max(0, 1 - speedReduction);
   const incomePerCycle =
     source.CurrencyOutputMultiplier *
     generatorLevelMultiplier(balance, generatorId, level) *

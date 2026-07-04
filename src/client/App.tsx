@@ -5,36 +5,57 @@ import {
   getLocalization,
   getSchedule,
 } from "./api/balancesApi";
+import {
+  createDefaultActiveState,
+  type ActiveState,
+} from "./game/activeStateTypes";
+import type { AppViewId } from "./game/derivedTypes";
+import { lookupLocalization, parseLocalization } from "./game/localization";
+import {
+  buildCardProjections,
+  buildDeliveryProjection,
+  buildGachaProjection,
+  buildGoblinCostProjection,
+  buildMapProjection,
+  buildMineshaftProjections,
+  buildSummaryProjection,
+} from "./game/projections";
+import type { Balance, LteScheduleEntry } from "./game/sourceTypes";
 import { CardsView } from "./views/CardsView";
+import { DeliveriesView } from "./views/DeliveriesView";
 import { GachaView } from "./views/GachaView";
+import { GoblinsView } from "./views/GoblinsView";
 import { MapView } from "./views/MapView";
 import { MineshaftsView } from "./views/MineshaftsView";
 import { SaveView } from "./views/SaveView";
-import type { AppViewId } from "./game/derivedTypes";
-import { lookupLocalization, parseLocalization } from "./game/localization";
-import type { Balance, LteScheduleEntry } from "./game/sourceTypes";
+import { SummaryView } from "./views/SummaryView";
 
 const FALLBACK_BALANCE_ID = "evergreen";
 const views: Array<{ id: AppViewId; label: string }> = [
+  { id: "summary", label: "Summary" },
   { id: "map", label: "Map" },
   { id: "mineshafts", label: "Mineshafts" },
   { id: "cards", label: "Cards" },
+  { id: "goblins", label: "Goblins" },
+  { id: "deliveries", label: "Deliveries" },
   { id: "gacha", label: "Gacha" },
   { id: "save", label: "Save" },
 ];
 
 export function App() {
   const [balanceIds, setBalanceIds] = useState<string[]>([]);
-  const [selectedBalanceId, setSelectedBalanceId] = useState(FALLBACK_BALANCE_ID);
+  const [selectedBalanceId, setSelectedBalanceId] =
+    useState(FALLBACK_BALANCE_ID);
+  const [selectedScheduleEntryId, setSelectedScheduleEntryId] = useState<
+    string | null
+  >(null);
+  const [pendingDefaultZoneId, setPendingDefaultZoneId] = useState("zone1");
   const [balance, setBalance] = useState<Balance | null>(null);
+  const [activeState, setActiveState] = useState<ActiveState | null>(null);
   const [schedule, setSchedule] = useState<LteScheduleEntry[]>([]);
   const [localizationText, setLocalizationText] = useState("");
-  const [activeView, setActiveView] = useState<AppViewId>("map");
+  const [activeView, setActiveView] = useState<AppViewId>("summary");
   const [balancePanelOpen, setBalancePanelOpen] = useState(false);
-  const [selectedZoneId, setSelectedZoneId] = useState("");
-  const [cardLevels, setCardLevels] = useState<Record<string, number>>({});
-  const [mineshaftLevels, setMineshaftLevels] = useState<Record<string, number>>({});
-  const [checkpointCount, setCheckpointCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const localization = useMemo(
@@ -43,61 +64,206 @@ export function App() {
   );
   const t = (key: string, fallback?: string) =>
     lookupLocalization(localization, key, fallback);
-  const balanceName = t(`theme.${selectedBalanceId}.name`, titleCase(selectedBalanceId));
+  const balanceName = t(
+    `theme.${selectedBalanceId}.name`,
+    titleCase(selectedBalanceId),
+  );
 
   useEffect(() => {
-    Promise.allSettled([getBalanceIds(), getSchedule(), getLocalization()]).then(
-      ([balanceIdsResult, scheduleResult, localizationResult]) => {
-        if (balanceIdsResult.status === "fulfilled") {
-          setBalanceIds(balanceIdsResult.value);
-        }
-        if (scheduleResult.status === "fulfilled") {
-          setSchedule(
-            scheduleResult.value.LteDatas ?? scheduleResult.value.LteData ?? [],
-          );
-        }
-        if (localizationResult.status === "fulfilled") {
-          setLocalizationText(localizationResult.value);
-        }
-
-        const rejected = [balanceIdsResult, scheduleResult, localizationResult].find(
-          (result) => result.status === "rejected",
+    Promise.allSettled([
+      getBalanceIds(),
+      getSchedule(),
+      getLocalization(),
+    ]).then(([balanceIdsResult, scheduleResult, localizationResult]) => {
+      if (balanceIdsResult.status === "fulfilled") {
+        setBalanceIds(balanceIdsResult.value);
+      }
+      if (scheduleResult.status === "fulfilled") {
+        setSchedule(
+          scheduleResult.value.LteDatas ?? scheduleResult.value.LteData ?? [],
         );
-        setError(rejected ? "Some balance metadata could not be loaded." : null);
-      },
-    );
+      }
+      if (localizationResult.status === "fulfilled") {
+        setLocalizationText(localizationResult.value);
+      }
+
+      const rejected = [
+        balanceIdsResult,
+        scheduleResult,
+        localizationResult,
+      ].find((result) => result.status === "rejected");
+      setError(rejected ? "Some balance metadata could not be loaded." : null);
+    });
   }, []);
 
   useEffect(() => {
     setBalance(null);
+    setActiveState(null);
     getBalance(selectedBalanceId)
       .then((data) => {
         setBalance(data);
-        setSelectedZoneId(data.Zones[0]?.Id ?? "");
-        setCardLevels({});
-        setMineshaftLevels({});
-        setCheckpointCount(0);
+        setActiveState(createDefaultActiveState(data, pendingDefaultZoneId));
         setError(null);
       })
       .catch((err) => {
         setError(`${err.message} error`);
       });
-  }, [selectedBalanceId]);
+  }, [selectedBalanceId, pendingDefaultZoneId]);
+
+  const mapProjection = useMemo(
+    () =>
+      balance && activeState
+        ? buildMapProjection(
+            balance,
+            activeState,
+            activeState.selectedZoneId,
+            t,
+          )
+        : null,
+    [balance, activeState, localization],
+  );
+  const cardProjections = useMemo(
+    () =>
+      balance && activeState ? buildCardProjections(balance, activeState) : [],
+    [balance, activeState],
+  );
+  const mineshaftProjections = useMemo(
+    () =>
+      balance && activeState
+        ? buildMineshaftProjections(balance, activeState)
+        : [],
+    [balance, activeState],
+  );
+  const summaryProjection = useMemo(
+    () =>
+      balance && activeState
+        ? buildSummaryProjection(balance, activeState)
+        : null,
+    [balance, activeState],
+  );
+  const goblinProjection = useMemo(
+    () =>
+      balance && activeState
+        ? buildGoblinCostProjection(balance, activeState)
+        : null,
+    [balance, activeState],
+  );
+  const deliveryProjection = useMemo(
+    () =>
+      balance && activeState && summaryProjection
+        ? buildDeliveryProjection(
+            balance,
+            activeState,
+            summaryProjection.inactiveIncomePerSecond,
+          )
+        : null,
+    [balance, activeState, summaryProjection],
+  );
+  const gachaProjection = useMemo(
+    () =>
+      balance && activeState
+        ? buildGachaProjection(balance, activeState)
+        : null,
+    [balance, activeState],
+  );
+
+  function updateActiveState(updater: (state: ActiveState) => ActiveState) {
+    setActiveState((state) => (state ? updater(state) : state));
+  }
+
+  function setSelectedZoneId(zoneId: string) {
+    updateActiveState((state) => ({ ...state, selectedZoneId: zoneId }));
+  }
+
+  function setCardLevel(cardId: string, level: number) {
+    updateActiveState((state) => ({
+      ...state,
+      cards: {
+        ...state.cards,
+        [cardId]: {
+          quantity: state.cards[cardId]?.quantity ?? 0,
+          level,
+        },
+      },
+    }));
+  }
+
+  function setCardQuantity(cardId: string, quantity: number) {
+    updateActiveState((state) => ({
+      ...state,
+      cards: {
+        ...state.cards,
+        [cardId]: {
+          level: state.cards[cardId]?.level ?? 0,
+          quantity,
+        },
+      },
+    }));
+  }
+
+  function setGeneratorLevel(generatorId: string, level: number) {
+    updateActiveState((state) => ({
+      ...state,
+      generators: {
+        ...state.generators,
+        [generatorId]: { level },
+      },
+    }));
+  }
+
+  function setGeneratorOpened(generatorId: string, opened: boolean) {
+    updateActiveState((state) => {
+      const ids = new Set(state.map.mineshaftIdsOpened);
+      if (opened) {
+        ids.add(generatorId);
+      } else {
+        ids.delete(generatorId);
+      }
+      ids.add("spawningcart");
+      return {
+        ...state,
+        map: {
+          ...state.map,
+          mineshaftIdsOpened: Array.from(ids),
+        },
+      };
+    });
+  }
+
+  function setCheckpointCount(count: number) {
+    updateActiveState((state) => ({
+      ...state,
+      map: { ...state.map, checkpointsOpened: count },
+    }));
+  }
+
+  function setGoblinLevel(level: number) {
+    updateActiveState((state) => ({
+      ...state,
+      goblins: { ...state.goblins, currentGoblinLevel: level },
+    }));
+  }
 
   return (
     <>
-      <header className="navbar navbar-dark bg-dark px-3 gng-header">
-        <a className="navbar-brand d-flex align-items-center gap-2" href="#">
-          <img src="/favicon.png" width={32} height={32} alt="" />
-          <span>G&amp;G Calculator</span>
-        </a>
-        <button
-          className="btn btn-outline-light"
-          type="button"
-          onClick={() => setBalancePanelOpen((isOpen) => !isOpen)}
-        >
-          {balanceName}
-        </button>
+      <header className="navbar bg-body-tertiary px-3 gng-header">
+        <div className="gng-navbar-row">
+          <a className="navbar-brand d-flex align-items-center gap-2" href="#">
+            <img src="/favicon.png" width={32} height={32} alt="" />
+            <span>G&amp;G Calculator</span>
+          </a>
+          <button
+            className="btn btn-outline-secondary gng-balance-button"
+            type="button"
+            onClick={() => setBalancePanelOpen((isOpen) => !isOpen)}
+          >
+            {balanceName}
+          </button>
+          <div className="flex-grow-1" />
+          <button className="btn btn-link" type="button">
+            About
+          </button>
+        </div>
       </header>
 
       {balancePanelOpen && (
@@ -105,8 +271,17 @@ export function App() {
           balanceIds={balanceIds}
           schedule={schedule}
           selectedBalanceId={selectedBalanceId}
-          setSelectedBalanceId={(balanceId) => {
+          selectedScheduleEntryId={selectedScheduleEntryId}
+          setDirectBalance={(balanceId) => {
+            setSelectedScheduleEntryId(null);
+            setPendingDefaultZoneId("zone1");
             setSelectedBalanceId(balanceId);
+            setBalancePanelOpen(false);
+          }}
+          setScheduleEntry={(entry) => {
+            setSelectedScheduleEntryId(entry.Id);
+            setPendingDefaultZoneId(`zone${entry.ExclusiveZoneNumber}`);
+            setSelectedBalanceId(entry.GameDataId);
             setBalancePanelOpen(false);
           }}
           t={t}
@@ -114,60 +289,95 @@ export function App() {
       )}
 
       <main>
-        <div className="px-3 pt-3">
-          <div className="btn-group flex-wrap" role="group" aria-label="Calculator section">
-            {views.map((view) => (
+        {balance && activeState && (
+          <div className="px-3 pt-3">
+            <label className="form-label" htmlFor="globalZoneSelect">
+              Zone
+            </label>
+            <select
+              className="form-select gng-zone-select"
+              id="globalZoneSelect"
+              value={activeState.selectedZoneId}
+              onChange={(event) => setSelectedZoneId(event.target.value)}
+            >
+              {balance.Zones.map((zone) => (
+                <option key={zone.Id} value={zone.Id}>
+                  {zone.Id}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <ul className="nav nav-tabs px-3 pt-3">
+          {views.map((view) => (
+            <li className="nav-item" key={view.id}>
               <button
-                className={`btn btn-sm ${
-                  activeView === view.id ? "btn-info" : "btn-outline-info"
-                }`}
-                key={view.id}
+                className={`nav-link ${activeView === view.id ? "active" : ""}`}
                 type="button"
                 onClick={() => setActiveView(view.id)}
               >
                 {view.label}
               </button>
-            ))}
-          </div>
-        </div>
+            </li>
+          ))}
+        </ul>
 
         {error && <div className="alert alert-warning m-3">{error}</div>}
-        {!balance && activeView !== "save" && <div className="p-3">Loading...</div>}
-
-        {balance && activeView === "map" && (
-          <MapView
-            balance={balance}
-            selectedZoneId={selectedZoneId}
-            onSelectedZoneIdChange={setSelectedZoneId}
-          />
+        {!balance && activeView !== "save" && (
+          <div className="p-3">Loading...</div>
         )}
-        {balance && activeView === "mineshafts" && (
+
+        {balance &&
+          activeState &&
+          summaryProjection &&
+          activeView === "summary" && (
+            <SummaryView
+              activeState={activeState}
+              checkpointMax={mapProjection?.checkpointCount ?? 0}
+              projection={summaryProjection}
+              onCheckpointCountChange={setCheckpointCount}
+              onGoblinLevelChange={setGoblinLevel}
+            />
+          )}
+        {mapProjection && activeView === "map" && (
+          <MapView map={mapProjection} />
+        )}
+        {balance && activeState && activeView === "mineshafts" && (
           <MineshaftsView
             balance={balance}
-            cardLevels={cardLevels}
-            mineshaftLevels={mineshaftLevels}
-            checkpointCount={checkpointCount}
-            onCardLevelChange={(cardId, level) =>
-              setCardLevels((levels) => ({ ...levels, [cardId]: level }))
-            }
-            onMineshaftLevelChange={(generatorId, level) =>
-              setMineshaftLevels((levels) => ({ ...levels, [generatorId]: level }))
-            }
-            onCheckpointCountChange={setCheckpointCount}
+            mineshafts={mineshaftProjections}
+            onCardLevelChange={setCardLevel}
+            onGeneratorLevelChange={setGeneratorLevel}
+            onGeneratorOpenedChange={setGeneratorOpened}
             t={t}
           />
         )}
-        {balance && activeView === "cards" && (
+        {activeView === "cards" && (
           <CardsView
-            balance={balance}
-            cardLevels={cardLevels}
-            onCardLevelChange={(cardId, level) =>
-              setCardLevels((levels) => ({ ...levels, [cardId]: level }))
-            }
+            cards={cardProjections}
+            onCardLevelChange={setCardLevel}
+            onCardQuantityChange={setCardQuantity}
             t={t}
           />
         )}
-        {balance && activeView === "gacha" && <GachaView balance={balance} />}
+        {goblinProjection && activeView === "goblins" && (
+          <GoblinsView projection={goblinProjection} />
+        )}
+        {deliveryProjection && activeView === "deliveries" && (
+          <DeliveriesView projection={deliveryProjection} />
+        )}
+        {balance &&
+          activeState &&
+          gachaProjection &&
+          activeView === "gacha" && (
+            <GachaView
+              activeState={activeState}
+              balance={balance}
+              projection={gachaProjection}
+              onCardLevelChange={setCardLevel}
+            />
+          )}
         {activeView === "save" && <SaveView />}
       </main>
 
@@ -183,57 +393,106 @@ function BalancePanel({
   balanceIds,
   schedule,
   selectedBalanceId,
-  setSelectedBalanceId,
+  selectedScheduleEntryId,
+  setDirectBalance,
+  setScheduleEntry,
   t,
 }: {
   balanceIds: string[];
   schedule: LteScheduleEntry[];
   selectedBalanceId: string;
-  setSelectedBalanceId: (balanceId: string) => void;
+  selectedScheduleEntryId: string | null;
+  setDirectBalance: (balanceId: string) => void;
+  setScheduleEntry: (entry: LteScheduleEntry) => void;
   t: (key: string, fallback?: string) => string;
 }) {
+  const activeSchedule = schedule.filter(isScheduleEntryActive);
+  const sortedBalances = balanceIds
+    .filter((balanceId) => balanceId !== "evergreen")
+    .sort((a, b) =>
+      t(`theme.${a}.name`, titleCase(a)).localeCompare(
+        t(`theme.${b}.name`, titleCase(b)),
+      ),
+    );
+
   return (
     <section className="gng-balance-panel border-bottom bg-body p-3">
-      <h2 className="h5">{t(`theme.${selectedBalanceId}.name`, selectedBalanceId)}</h2>
       <div className="row g-3">
         <div className="col-lg-8">
-          <h3 className="h6">Schedule</h3>
+          <h2 className="h6">Schedule</h2>
           <div className="list-group">
-            {schedule.map((entry) => (
+            {activeSchedule.map((entry) => (
               <button
-                className="list-group-item list-group-item-action"
+                className={`list-group-item list-group-item-action ${
+                  selectedScheduleEntryId === entry.Id ? "active" : ""
+                }`}
                 key={entry.Id}
                 type="button"
-                onClick={() => setSelectedBalanceId(entry.GameDataId)}
+                onClick={() => setScheduleEntry(entry)}
               >
-                <strong>{t(`theme.${entry.GameDataId}.name`, entry.GameDataId)}</strong>{" "}
-                <span className="text-secondary">
-                  {formatDate(entry.StartDateTimeUtc)} - {formatDate(entry.EndDateTimeUtc)}
+                <span className="d-flex justify-content-between gap-3">
+                  <strong>
+                    {t(`theme.${entry.GameDataId}.name`, entry.GameDataId)}
+                  </strong>
+                  <span className="gng-date-text">
+                    {formatDate(entry.StartDateTimeUtc)} -{" "}
+                    {formatDate(entry.EndDateTimeUtc)}
+                  </span>
                 </span>
               </button>
             ))}
           </div>
         </div>
         <div className="col-lg-4">
-          <h3 className="h6">All Events</h3>
+          <h2 className="h6">All Balances</h2>
           <div className="list-group">
-            {balanceIds
-              .filter((balanceId) => balanceId !== "evergreen")
-              .map((balanceId) => (
-                <button
-                  className="list-group-item list-group-item-action"
-                  key={balanceId}
-                  type="button"
-                  onClick={() => setSelectedBalanceId(balanceId)}
-                >
-                  {t(`theme.${balanceId}.name`, titleCase(balanceId))}
-                </button>
-              ))}
+            <button
+              className={`list-group-item list-group-item-action gng-main-mine-entry ${
+                !selectedScheduleEntryId && selectedBalanceId === "evergreen"
+                  ? "active"
+                  : ""
+              }`}
+              type="button"
+              onClick={() => setDirectBalance("evergreen")}
+            >
+              {t("theme.evergreen.name", "Main Mines")}
+            </button>
+            {sortedBalances.map((balanceId) => (
+              <button
+                className={`list-group-item list-group-item-action ${
+                  !selectedScheduleEntryId && selectedBalanceId === balanceId
+                    ? "active"
+                    : ""
+                }`}
+                key={balanceId}
+                type="button"
+                onClick={() => setDirectBalance(balanceId)}
+              >
+                {t(`theme.${balanceId}.name`, titleCase(balanceId))}
+              </button>
+            ))}
           </div>
         </div>
       </div>
     </section>
   );
+}
+
+function isScheduleEntryActive(entry: LteScheduleEntry): boolean {
+  const end = new Date(entry.EndDateTimeUtc);
+  if (Number.isNaN(end.getTime())) {
+    return true;
+  }
+  const endOfLocalDay = new Date(
+    end.getFullYear(),
+    end.getMonth(),
+    end.getDate(),
+    23,
+    59,
+    59,
+    999,
+  );
+  return new Date() <= endOfLocalDay;
 }
 
 function formatDate(value: string): string {

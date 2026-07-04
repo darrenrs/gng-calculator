@@ -35,5 +35,5 @@ public/       Static assets copied by Vite
 
 ## Version
 
-Beta 0.2 (2026-06-30)
+Beta 0.3 (2026-07-03)
 (C) 2024-26 Darren R. Skidmore

@@ -1,8 +1,13 @@
 import { useMemo, useState } from "react";
+import type { ActiveState } from "../game/activeStateTypes";
+import type { GachaProjection } from "../game/derivedTypes";
 import type { Balance, Gacha, RankMultiplier } from "../game/sourceTypes";
 
 interface GachaViewProps {
   balance: Balance;
+  activeState: ActiveState;
+  projection: GachaProjection;
+  onCardLevelChange: (cardId: string, level: number) => void;
 }
 
 const cardIncreaseRareCoeff = [
@@ -15,15 +20,20 @@ const gachaTypes: Record<number, "Normal" | "Premium" | "Rare"> = {
   3: "Rare",
 };
 
-export function GachaView({ balance }: GachaViewProps) {
-  const [selectedZoneId, setSelectedZoneId] = useState(balance.Zones[0]?.Id ?? "");
+export function GachaView({
+  balance,
+  activeState,
+  projection,
+  onCardLevelChange,
+}: GachaViewProps) {
   const [selectedSubZoneId, setSelectedSubZoneId] = useState("0");
-  const [cardIncreaseRareLvl, setCardIncreaseRareLvl] = useState(0);
+  const card16 = balance.Cards.find((card) => card.StatModifierType === 16);
 
   const gachaChests = useMemo(
     () =>
       balance.Gacha.filter(
-        (gacha) => !gacha.GuaranteedCardIds?.length && gacha.GachaType in gachaTypes,
+        (gacha) =>
+          !gacha.GuaranteedCardIds?.length && gacha.GachaType in gachaTypes,
       ),
     [balance],
   );
@@ -32,40 +42,33 @@ export function GachaView({ balance }: GachaViewProps) {
     [balance],
   );
   const selectedZone =
-    balance.Zones.find((zone) => zone.Id === selectedZoneId) ?? balance.Zones[0];
-  const selectedSubZone = selectedZone?.RankMultipliers[Number(selectedSubZoneId)];
+    balance.Zones.find((zone) => zone.Id === activeState.selectedZoneId) ??
+    balance.Zones[0];
+  const selectedSubZone =
+    selectedZone?.RankMultipliers[Number(selectedSubZoneId)];
 
   return (
     <>
       <div className="container py-3" id="inputFields">
         <div className="row g-2 align-items-end">
           <div className="col-sm-4">
-            <label htmlFor="zoneId" className="form-label">
-              Zone ID
+            <label htmlFor="subzoneId" className="form-label">
+              Unlocked Checkpoints and Shafts
             </label>
-            <select
-              className="form-select"
-              id="zoneId"
-              onChange={(event) => {
-                setSelectedZoneId(event.target.value);
-                setSelectedSubZoneId("0");
-              }}
-              value={selectedZone?.Id ?? ""}
-            >
-              {balance.Zones.map((zone) => (
-                <option key={zone.Id} value={zone.Id}>
-                  {zone.Id}
-                </option>
-              ))}
-            </select>
+            <input
+              className="form-control"
+              id="subzoneId"
+              readOnly
+              value={projection.unlockedCheckpointsAndShafts}
+            />
           </div>
           <div className="col-sm-4">
-            <label htmlFor="subzoneId" className="form-label">
-              Walls+Shafts Open
+            <label htmlFor="subzoneRank" className="form-label">
+              Rank Multiplier Row
             </label>
             <select
               className="form-select"
-              id="subzoneId"
+              id="subzoneRank"
               onChange={(event) => setSelectedSubZoneId(event.target.value)}
               value={selectedSubZoneId}
             >
@@ -76,34 +79,39 @@ export function GachaView({ balance }: GachaViewProps) {
               ))}
             </select>
           </div>
-          <div className="col-sm-3">
-            <label htmlFor="cardIncreaseRareLvl" className="form-label">
-              Cards+ Lvl
-            </label>
-            <select
-              className="form-select"
-              id="cardIncreaseRareLvl"
-              onChange={(event) => setCardIncreaseRareLvl(Number(event.target.value))}
-              value={cardIncreaseRareLvl}
-            >
-              {Array.from({ length: 10 }, (_value, index) => (
-                <option key={index} value={index}>
-                  {index}
-                </option>
-              ))}
-            </select>
-          </div>
+          {card16 && (
+            <div className="col-sm-3">
+              <label htmlFor="cardIncreaseRareLvl" className="form-label">
+                Cards+ Lvl
+              </label>
+              <select
+                className="form-select"
+                id="cardIncreaseRareLvl"
+                onChange={(event) =>
+                  onCardLevelChange(card16.Id, Number(event.target.value))
+                }
+                value={projection.gachaCardLevel}
+              >
+                {Array.from({ length: 10 }, (_value, index) => (
+                  <option key={index} value={index}>
+                    {index}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="table-responsive gng-scroll-pane px-3">
         {selectedSubZone && (
           <GachaTable
-            cardIncreaseRareLvl={cardIncreaseRareLvl}
+            cardIncreaseRareLvl={projection.gachaCardLevel}
             gachaData={gachaChests}
             subZoneData={selectedSubZone}
           />
         )}
+        <ScriptedGachaTable gachaData={projection.scriptedGachas} />
       </div>
     </>
   );
@@ -169,9 +177,11 @@ function GachaRow({
   const totalCommon =
     totalCards - (totalUncommon + totalRare + totalEventEpic + totalLegendary);
   const softCurrencyMin =
-    gacha.SoftCurrencyMin * Number(subZoneData[`GachaSoftCurrencyMult${cardType}`]);
+    gacha.SoftCurrencyMin *
+    Number(subZoneData[`GachaSoftCurrencyMult${cardType}`]);
   const softCurrencyMax =
-    gacha.SoftCurrencyMax * Number(subZoneData[`GachaSoftCurrencyMult${cardType}`]);
+    gacha.SoftCurrencyMax *
+    Number(subZoneData[`GachaSoftCurrencyMult${cardType}`]);
   const leaderboardCurrency =
     gacha.LeaderboardCurrency *
     Number(subZoneData[`GachaLeaderboardCurrencyMult${cardType}`]);
@@ -193,4 +203,38 @@ function GachaRow({
 
 function normalizeCardTotal(value: number): number {
   return Number.isFinite(value) ? value : 0;
+}
+
+function ScriptedGachaTable({ gachaData }: { gachaData: Gacha[] }) {
+  if (!gachaData.length) {
+    return null;
+  }
+
+  return (
+    <table className="table table-striped table-sm mt-3">
+      <thead>
+        <tr>
+          <th>Id</th>
+          <th>Guaranteed Cards</th>
+          <th>Elixir</th>
+          <th>Crowns</th>
+        </tr>
+      </thead>
+      <tbody>
+        {gachaData.map((gacha) => (
+          <tr key={gacha.Id}>
+            <td>{gacha.Id}</td>
+            <td>
+              {gacha.GuaranteedCardIds.map(
+                (cardId, index) =>
+                  `${cardId} x${gacha.GuaranteedCardCounts[index] ?? 0}`,
+              ).join(", ")}
+            </td>
+            <td>{gacha.SoftCurrencyMin}</td>
+            <td>{gacha.LeaderboardCurrency}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }

@@ -6,6 +6,21 @@ div#tableContainer {
   position: sticky;
   top: 0;
   z-index: 30;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.gng-navbar-row {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.gng-balance-button {
+  max-width: min(22rem, 45vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .gng-balance-panel {
@@ -21,16 +36,89 @@ div#tableContainer {
   overflow: auto;
 }
 
-.gng-map-table {
-  table-layout: fixed;
+.gng-map-scroll {
+  max-height: 72vh;
+  overflow: auto;
 }
 
-.gng-map-table td {
-  font-family: monospace;
-  font-size: 10px;
-  height: 2.25rem;
-  min-width: 8rem;
+.gng-map-grid {
+  --gng-map-cell-size: 48px;
+  display: grid;
+  position: relative;
+  width: max-content;
+}
+
+.gng-map-base-cell {
+  background: #d6d8db;
+  min-height: var(--gng-map-cell-size);
+  min-width: var(--gng-map-cell-size);
+}
+
+.gng-map-object {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  justify-content: center;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0.25rem;
+  text-align: center;
+  white-space: pre-line;
+  z-index: 1;
+}
+
+.gng-map-object-content {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: center;
+  max-height: 100%;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.gng-map-object-obstruction {
+  background: #000;
+  color: #fff;
+}
+
+.gng-map-object-rock {
+  background: #f1f3f5;
+  color: #212529;
+}
+
+.gng-map-object-mineshaft,
+.gng-map-object-spawningCart {
+  background: #f8d7da;
+  color: #58151c;
+}
+
+.gng-map-object-checkpoint,
+.gng-map-object-exit {
+  background: #fff3cd;
+  color: #664d03;
+}
+
+.gng-map-object-unknown {
+  background: #cff4fc;
+}
+
+.gng-zone-select {
+  max-width: 18rem;
+}
+
+.gng-date-text {
+  font-size: 12px;
+  text-align: right;
   white-space: nowrap;
+}
+
+.gng-main-mine-entry {
+  border-bottom-width: 3px;
+}
+
+table.table {
+  font-size: 12px;
 }
 
 .gng-level-cell {
@@ -42,6 +130,14 @@ div#tableContainer {
 
 .gng-level-cell input {
   max-width: 6rem;
+}
+
+.gng-manager-input {
+  align-items: center;
+  display: grid;
+  gap: 0.25rem;
+  grid-template-columns: minmax(6rem, 1fr) 5rem;
+  margin-bottom: 0.25rem;
 }
 
 .gng-json-box {
@@ -88,6 +184,16 @@ table.gng-mineshaft-table tr td:first-child {
 }
 
 @media (max-width: 480px) {
+  .gng-navbar-row {
+    flex-wrap: wrap;
+  }
+
+  .gng-balance-button {
+    flex-basis: 100%;
+    max-width: none;
+    order: 2;
+  }
+
   .gng-balance-panel {
     height: calc(100vh - 64px);
     max-height: none;

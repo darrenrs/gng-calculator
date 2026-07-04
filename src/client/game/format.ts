@@ -3,7 +3,7 @@ export function numberFormat(n: number): string {
     return String(NaN);
   }
 
-  if (n < 10_000) {
+  if (n < 100_000) {
     return parseInt(Math.floor(n).toFixed(0), 10).toLocaleString();
   }
 
@@ -24,4 +24,40 @@ export function numberFormat(n: number): string {
   }
 
   return `${significantFigures} ${suffix}`;
+}
+
+export function timeFormat(seconds: number): string {
+  if (!Number.isFinite(seconds)) {
+    return "-";
+  }
+  if (seconds >= 31_560_000) {
+    const years = Math.floor(seconds / 31_560_000);
+    const days = Math.floor((seconds % 31_560_000) / 86_400);
+    return `${years}y ${String(days).padStart(3, "0")}d`;
+  }
+  if (seconds >= 864_000) {
+    return `${Math.floor(seconds / 86_400)}d`;
+  }
+  if (seconds >= 86_400) {
+    const days = Math.floor(seconds / 86_400);
+    const hours = Math.floor((seconds % 86_400) / 3_600);
+    return `${days}d ${String(hours).padStart(2, "0")}h`;
+  }
+  if (seconds >= 3_600) {
+    const hours = Math.floor(seconds / 3_600);
+    const minutes = Math.floor((seconds % 3_600) / 60);
+    return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  }
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${minutes}m ${String(secs).padStart(2, "0")}s`;
+  }
+  if (seconds >= 1) {
+    return `${Math.floor(seconds)}s`;
+  }
+  if (seconds >= 0.001) {
+    return `${Math.round(seconds * 1000)}ms`;
+  }
+  return "instant";
 }

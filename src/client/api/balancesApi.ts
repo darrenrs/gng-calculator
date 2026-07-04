@@ -37,7 +37,10 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
 
   if (!response.ok) {
-    throw new Error(String(response.status));
+    const errorData = await response.json();
+    throw new Error(
+      `${String(response.status)} ${errorData?.detail || response.statusText}`,
+    );
   }
 
   return response.json() as Promise<T>;
