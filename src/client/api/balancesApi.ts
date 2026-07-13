@@ -1,4 +1,4 @@
-import type { Balance, LteSchedule } from "../game/sourceTypes";
+import type { Balance, LteSchedule } from "../types/sourceBalanceTypes";
 
 export async function getBalanceIds(): Promise<string[]> {
   return getJson<string[]>("/api/balances");

@@ -2,20 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createDefaultActiveState,
-  SPAWNING_CART_ID,
-} from "../src/client/game/activeStateTypes";
-import type { Balance } from "../src/client/game/sourceTypes";
+  FORGE_ID,
+} from "../src/client/types/activeStateTypes";
+import type { Balance } from "../src/client/types/sourceBalanceTypes";
 
 test("default active state uses balance defaults and keeps spawning cart opened", () => {
   const state = createDefaultActiveState(balanceSample(), "zone2");
 
-  assert.equal(state.schemaVersion, 1);
   assert.equal(state.balanceId, "sample");
   assert.equal(state.selectedZoneId, "zone2");
   assert.equal(state.maximumCurrency, 1e100);
-  assert.deepEqual(state.map.mineshaftIdsOpened, [SPAWNING_CART_ID]);
-  assert.equal(state.generators[SPAWNING_CART_ID].level, 1);
-  assert.equal(state.goblins.currentGoblinLevel, 1);
+  assert.deepEqual(state.mapInput.mineshaftIdsOpened, [FORGE_ID]);
+  assert.equal(state.generatorsInput[FORGE_ID].level, 1);
+  assert.equal(state.goblinsInput.currentGoblinLevel, 1);
 });
 
 function balanceSample(): Balance {
@@ -26,6 +25,7 @@ function balanceSample(): Balance {
         ThemeId: "sample",
         IsWorldEvergreen: false,
         RankUpType: 2,
+        BaseUnitCap: 10,
         AntiCheatSettings: { CoreCurrencyMax: 1e100 },
         DeliveryDelaySecBase: 22,
         DeliveryDelaySecGrowth: 1.02,
@@ -46,8 +46,8 @@ function balanceSample(): Balance {
     Reinforcements: [],
     Deliveries: [],
     Miners: [],
-    MiningTargetHealths: null,
-    FreeGachaCycle: null,
-    Spells: null,
+    MiningTargetHealths: [],
+    FreeGachaCycle: [],
+    Spells: [],
   };
 }

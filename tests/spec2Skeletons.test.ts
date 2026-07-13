@@ -1,5 +1,2 @@
-import test from "node:test";
-
-test.todo("generator automation and income/sec behavior");
-test.todo("summary projections");
-test.todo("delivery active-income calculations once formulas are implemented");
+// The former Spec 02 skeletons are now covered by executable regression tests
+// in spec3Calculations.test.ts and spec4Calculations.test.ts.

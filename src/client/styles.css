@@ -56,6 +56,7 @@ div#tableContainer {
 
 .gng-map-object {
   align-items: center;
+  border: 1px solid transparent;
   display: flex;
   font-size: 12px;
   justify-content: center;
@@ -66,6 +67,12 @@ div#tableContainer {
   text-align: center;
   white-space: pre-line;
   z-index: 1;
+}
+
+.gng-map-object-interactive:hover,
+.gng-map-object-interactive:focus {
+  border-color: #000;
+  outline: none;
 }
 
 .gng-map-object-content {
@@ -103,6 +110,42 @@ div#tableContainer {
   background: #cff4fc;
 }
 
+.gng-map-cell-b,
+.gng-map-object-barrelGoblin {
+  background: #6f4e37;
+  color: #fff;
+}
+
+.gng-map-cell-d,
+.gng-map-object-barrelDelivery {
+  background: #c99b6b;
+  color: #24170d;
+}
+
+.gng-map-cell-l,
+.gng-map-object-dynamite {
+  background: #f1a7a1;
+  color: #3b1110;
+}
+
+.gng-map-cell-m,
+.gng-map-object-goblin {
+  background: #79b65d;
+  color: #10230b;
+}
+
+.gng-map-cell-w,
+.gng-map-object-reward {
+  background: #ffd95a;
+  color: #3a2a00;
+}
+
+.gng-map-cell-y,
+.gng-map-object-goblinKing {
+  background: #d8b4fe;
+  color: #2f164f;
+}
+
 .gng-zone-select {
   max-width: 18rem;
 }
@@ -125,11 +168,63 @@ table.table {
   align-items: center;
   display: flex;
   gap: 0.5rem;
+  height: 100%;
   min-width: 8rem;
+}
+
+.gng-level-cell-td {
+  height: 100%;
+  vertical-align: middle;
 }
 
 .gng-level-cell input {
   max-width: 6rem;
+}
+
+.gng-mineshaft-row-unavailable > * {
+  color: #6c757d;
+}
+
+.gng-mineshaft-row-unavailable input,
+.gng-mineshaft-row-unavailable select,
+.gng-mineshaft-row-unavailable button {
+  color: #6c757d;
+}
+
+.gng-number-input,
+.gng-level-cell input[type="number"],
+.gng-manager-input input[type="number"],
+.gng-inline-number input[type="number"] {
+  -moz-appearance: textfield;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #868e96;
+  border-radius: 0;
+  box-shadow: none;
+  padding-left: 0.125rem;
+  padding-right: 0.125rem;
+}
+
+.gng-number-input::-webkit-outer-spin-button,
+.gng-number-input::-webkit-inner-spin-button,
+.gng-level-cell input[type="number"]::-webkit-outer-spin-button,
+.gng-level-cell input[type="number"]::-webkit-inner-spin-button,
+.gng-manager-input input[type="number"]::-webkit-outer-spin-button,
+.gng-manager-input input[type="number"]::-webkit-inner-spin-button,
+.gng-inline-number input[type="number"]::-webkit-outer-spin-button,
+.gng-inline-number input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.gng-inline-number {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.gng-inline-number input {
+  max-width: 5rem;
 }
 
 .gng-manager-input {
@@ -154,7 +249,7 @@ div.containerWithInput {
   height: 80vh;
 }
 
-table.gng-mineshaft-table {
+/* table.gng-mineshaft-table {
   white-space: nowrap;
   border-collapse: separate;
 }
@@ -181,7 +276,7 @@ table.gng-mineshaft-table tr td:first-child {
   left: 0;
   z-index: 9;
   border-right: 2px var(--bs-table-hover-color) solid;
-}
+} */
 
 @media (max-width: 480px) {
   .gng-navbar-row {

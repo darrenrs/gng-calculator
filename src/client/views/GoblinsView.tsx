@@ -1,5 +1,5 @@
-import type { GoblinCostProjection } from "../game/derivedTypes";
-import { numberFormat } from "../game/format";
+import type { GoblinCostProjection } from "../types/derivedTypes";
+import { numberFormat, timeFormat } from "../game/format";
 
 export function GoblinsView({
   projection,
@@ -8,7 +8,13 @@ export function GoblinsView({
 }) {
   return (
     <div className="p-3 table-responsive gng-scroll-pane">
-      <table className="table table-sm">
+      <p className="mb-3">
+        <strong>Max Goblins:</strong> {projection.maxGoblinCount}
+        <br />
+        <strong>Goblin Spawn Interval:</strong>{" "}
+        {timeFormat(projection.spawnIntervalSeconds)}
+      </p>
+      <table className="table table-striped table-sm">
         <thead>
           <tr>
             <th>Level</th>

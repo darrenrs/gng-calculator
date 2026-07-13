@@ -1,18 +1,16 @@
-import type { Balance } from "./sourceTypes";
+import type { Balance } from "./sourceBalanceTypes";
 
-export const ACTIVE_STATE_SCHEMA_VERSION = 1;
-export const SPAWNING_CART_ID = "spawningcart";
+export const FORGE_ID = "spawningcart";
 
 export type ActiveState = {
-  schemaVersion: number;
   balanceId: string;
   selectedZoneId: string;
   maximumCurrency: number;
-  map: MapInput;
-  goblins: GoblinInput;
-  cards: Record<string, CardInput>;
-  generators: Record<string, GeneratorInput>;
-  deliveries: Record<string, DeliveryInput>;
+  mapInput: MapInput;
+  goblinsInput: GoblinInput;
+  cardsInput: Record<string, CardInput>;
+  generatorsInput: Record<string, GeneratorInput>;
+  deliveriesInput: Record<string, DeliveryInput>;
 };
 
 export type MapInput = {
@@ -41,38 +39,37 @@ export function createDefaultActiveState(
   selectedZoneId = balance.Zones[0]?.Id ?? "",
 ): ActiveState {
   return {
-    schemaVersion: ACTIVE_STATE_SCHEMA_VERSION,
     balanceId: balance.Id,
     selectedZoneId,
     maximumCurrency:
       balance.BalanceProperties[0]?.AntiCheatSettings?.CoreCurrencyMax ??
       Infinity,
-    map: {
+    mapInput: {
       checkpointsOpened: 0,
-      mineshaftIdsOpened: [SPAWNING_CART_ID],
+      mineshaftIdsOpened: [FORGE_ID],
     },
-    goblins: {
+    goblinsInput: {
       currentGoblinLevel: 1,
       currentGoblinLevelProgress: 0,
     },
-    cards: {},
-    generators: {
-      [SPAWNING_CART_ID]: { level: 1 },
+    cardsInput: {},
+    generatorsInput: {
+      [FORGE_ID]: { level: 1 },
     },
-    deliveries: {},
+    deliveriesInput: {},
   };
 }
 
-export function withSpawningCartOpened(state: ActiveState): ActiveState {
-  if (state.map.mineshaftIdsOpened.includes(SPAWNING_CART_ID)) {
+export function withForgeOpened(state: ActiveState): ActiveState {
+  if (state.mapInput.mineshaftIdsOpened.includes(FORGE_ID)) {
     return state;
   }
 
   return {
     ...state,
-    map: {
-      ...state.map,
-      mineshaftIdsOpened: [SPAWNING_CART_ID, ...state.map.mineshaftIdsOpened],
+    mapInput: {
+      ...state.mapInput,
+      mineshaftIdsOpened: [FORGE_ID, ...state.mapInput.mineshaftIdsOpened],
     },
   };
 }

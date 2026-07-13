@@ -1,5 +1,3 @@
-// Balance Types
-
 export type Balance = {
   Id: string;
   BalanceProperties: BalanceProperties[];
@@ -7,8 +5,7 @@ export type Balance = {
   Rocks: Rock[];
   MineShafts: MineShaft[];
   Obstructions: Obstruction[];
-  // todo
-  MiningTargetHealths: null;
+  MiningTargetHealths: MiningTargetHealth[];
   GeneratorObjectives: GeneratorObjective[];
   Zones: Zone[];
   Reinforcements: Reinforcement[];
@@ -18,28 +15,28 @@ export type Balance = {
   Cards: Card[];
   Gacha: Gacha[];
   Deliveries: Delivery[];
-  // todo
-  FreeGachaCycle: null;
-  Spells: null;
+  FreeGachaCycle: FreeGachaCycle[];
+  Spells: Spell[];
 };
 
 export type BalanceProperties = {
   ThemeId: string;
   IsWorldEvergreen: boolean;
   RankUpType: RankUpType;
+  BaseUnitCap: number;
   DeliveryDelaySecBase: number;
   DeliveryDelaySecGrowth: number;
   DeliveryClaimCountResetSec: number;
   DeliveryMaxDupesResetSec: number;
-  AntiCheatSettings?: {
+  AntiCheatSettings: {
     CoreCurrencyMax: number;
   };
 };
 
 export enum RankUpType {
-  ZONE = 1,
-  MINESHAFT_AND_CHECKPOINT = 2,
-  MINESHAFT_AND_CHECKPOINT_AND_ZONE = 3,
+  Zone = 1,
+  MineShaftAndCheckPoint = 2,
+  MineShaftAndCheckPointAndZone = 3,
 }
 
 export type Miner = MapSizedObject & {
@@ -68,10 +65,10 @@ export type MapSizedObject = {
 };
 
 export enum FormulaType {
-  QUADRATIC = 0,
-  EXPONENTIAL = 1,
-  RAW_EXPONENTIAL = 2,
-  INVERSE_EXPO_ROUNDED = 3,
+  Quadratic = 0,
+  Exponential = 1,
+  RawExponential = 2,
+  InverseExpoRounded = 3,
 }
 
 export type Rock = MapSizedObject & {
@@ -95,17 +92,34 @@ export type Rock = MapSizedObject & {
 };
 
 export type RewardModel = {
-  RewardType: number; // possibly turn this into a proper enum
+  RewardType: RewardType; // possibly turn this into a proper enum
   DetailedType: string;
   Quantity: number;
 };
+
+export enum RewardType {
+  Currency = 0,
+  Gacha = 1,
+  CardByRarity = 2,
+  CardById = 3,
+  Miner = 4,
+  TimeSkip = 5,
+  ImmediateTimeSkipMinutes = 6,
+  Bundle = 7,
+  NoAds = 8,
+  Spell = 9,
+  MasterKey = 10,
+  Majestic = 11,
+  FreeSpin = 12,
+  BattlePassRegion = 13,
+}
 
 export type MineShaft = Partial<MapSizedObject> & {
   GenerationDelaySecBase: number;
   GenerationDelaySecMultiplier: number;
   GenerationDelaySecGrowth: number;
   GenerationDelaySecFormulaType: FormulaType;
-  CurrencyType: number; // possibly turn this into a proper enum
+  CurrencyType: CurrencyType;
   CurrencyOutputBase: number;
   CurrencyOutputMultiplier: number;
   CurrencyOutputGrowth: number;
@@ -116,7 +130,19 @@ export type MineShaft = Partial<MapSizedObject> & {
   UpgradeCostGrowth: number;
 };
 
+export enum CurrencyType {
+  Core = 1,
+  Soft = 2,
+  Hard = 3,
+  RealMoney = 4,
+  Lte = 5,
+  Leaderboard = 6,
+  BattlePass = 7,
+}
+
 export type Obstruction = MapSizedObject;
+
+export type MiningTargetHealth = {};
 
 export type GeneratorObjective = {
   GeneratorId: string;
@@ -228,13 +254,13 @@ export type Card = {
 };
 
 export enum Rarity {
-  COMMON = 1,
-  UNCOMMON = 2,
-  RARE = 3,
-  EVENTEPIC = 4,
-  LEGENDARY = 5,
-  MAJESTIC = 6,
-  ANCESTRAL = 7,
+  Common = 1,
+  Uncommon = 2,
+  Rare = 3,
+  EventEpic = 4,
+  Legendary = 5,
+  Majestic = 6,
+  Ancestral = 7,
 }
 
 export type Gacha = {
@@ -254,10 +280,10 @@ export type Gacha = {
 };
 
 export enum GachaType {
-  NORMAL = 0,
-  PREMIUM = 1,
-  FIXED = 2,
-  RARE = 3,
+  Normal = 0,
+  Premium = 1,
+  Fixed = 2,
+  Rare = 3,
 }
 
 export type Delivery = {
@@ -277,66 +303,11 @@ export type Delivery = {
 };
 
 export enum DeliveryType {
-  GOBLIN = 1,
-  ELIXIR = 2,
-  GOLD = 3,
-  DYNAMITE = 4,
+  Goblin = 1,
+  Elixir = 2,
+  Gold = 3,
+  Dynamite = 4,
 }
-
-// Save Types
-
-export type UniverseSave = {
-  SerializationVersion: number;
-  Evergreen?: WorldSave;
-  Lte?: WorldSave;
-  LastSave?: string | number;
-  SaveVersion?: number;
-};
-
-export type WorldSave = {
-  BalanceId: string;
-  WorldType: "EVERGREEN" | "LTE" | number;
-  Zone?: WorldZoneSave;
-  Cards?: OwnedCardSave[];
-  DeliveryClaimCount?: number;
-  DeliveryTime?: string | number;
-  DeliveryClaimCountResetTime?: string | number;
-  DeliveryDupeReset?: string | number;
-  ClaimedDeliveryDupeIds?: string[];
-  ClaimedDeliveryDupeCounts?: number[];
-  Rank?: number;
-  LastSaveTimestampSeconds?: string | number;
-};
-
-export type WorldZoneSave = {
-  Id: string;
-  Width: number;
-  Depth: number;
-  Grid?: WorldGridCellSave[];
-  ReinforcementsLevel?: number;
-  ClearedCheckPointLevelVals?: number[];
-  CoreCurrencyValue?: number;
-};
-
-export type WorldGridCellSave = {
-  Key?: string;
-  Id?: number;
-  Level?: number;
-  InteractionValue?: number;
-  State?: number;
-  InteractionValue2?: number;
-  SecondaryLevel?: number;
-  SecondaryId?: string;
-  TertiaryId?: string;
-  TertiaryLevel?: number;
-};
-
-export type OwnedCardSave = {
-  Id: string;
-  Quantity: number;
-  Level: number;
-  IsNew?: boolean;
-};
 
 export type LteSchedule = {
   LteDatas?: LteScheduleEntry[];
@@ -350,4 +321,26 @@ export type LteScheduleEntry = {
   StartDateTimeUtc: string;
   EndDateTimeUtc: string;
   TotalDuration?: string;
+};
+
+export type FreeGachaCycle = {
+  MaxFreeGachas: string;
+  Hours: number;
+  GachaIds: string[];
+};
+
+export type Spell = {
+  SpellType: number;
+  EffectBase: number;
+  EffectMultiplier: number;
+  EffectGrowth: number;
+  EffectFormulaType: FormulaType;
+  CritChanceBase: number;
+  CritChanceMultiplier: number;
+  CritChanceGrowth: number;
+  CritChanceFormulaType: FormulaType;
+  CritPowerBase: number;
+  CritPowerMultiplier: number;
+  CritPowerGrowth: number;
+  CritPowerFormulaType: FormulaType;
 };

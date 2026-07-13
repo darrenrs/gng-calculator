@@ -100,6 +100,6 @@ def download_balances(data_version: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--version", default=os.getenv("GAME_VER") or "1.49.0")
+    parser.add_argument("--version", default=os.getenv("GAME_VER") or "1.50.0")
     args = parser.parse_args()
     download_balances(args.version)

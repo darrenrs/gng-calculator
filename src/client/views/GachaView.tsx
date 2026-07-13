@@ -1,13 +1,20 @@
-import { useMemo, useState } from "react";
-import type { ActiveState } from "../game/activeStateTypes";
-import type { GachaProjection } from "../game/derivedTypes";
-import type { Balance, Gacha, RankMultiplier } from "../game/sourceTypes";
+import type {
+  GachaProjection,
+  LocalizationLookup,
+} from "../types/derivedTypes";
+import { formatGachaCount } from "../game/projections";
+import { numberFormat } from "../game/format";
+import type {
+  Balance,
+  Gacha,
+  RankMultiplier,
+} from "../types/sourceBalanceTypes";
 
 interface GachaViewProps {
   balance: Balance;
-  activeState: ActiveState;
   projection: GachaProjection;
   onCardLevelChange: (cardId: string, level: number) => void;
+  t: LocalizationLookup;
 }
 
 const cardIncreaseRareCoeff = [
@@ -22,62 +29,31 @@ const gachaTypes: Record<number, "Normal" | "Premium" | "Rare"> = {
 
 export function GachaView({
   balance,
-  activeState,
   projection,
   onCardLevelChange,
+  t,
 }: GachaViewProps) {
-  const [selectedSubZoneId, setSelectedSubZoneId] = useState("0");
   const card16 = balance.Cards.find((card) => card.StatModifierType === 16);
-
-  const gachaChests = useMemo(
-    () =>
-      balance.Gacha.filter(
-        (gacha) =>
-          !gacha.GuaranteedCardIds?.length && gacha.GachaType in gachaTypes,
-      ),
-    [balance],
-  );
-  const maxSubZone = useMemo(
-    () => Math.max(...balance.Zones.map((zone) => zone.RankMultipliers.length)),
-    [balance],
-  );
-  const selectedZone =
-    balance.Zones.find((zone) => zone.Id === activeState.selectedZoneId) ??
-    balance.Zones[0];
-  const selectedSubZone =
-    selectedZone?.RankMultipliers[Number(selectedSubZoneId)];
+  const selectedRankMultiplier = projection.selectedRankMultiplier;
+  const isEvergreen = balance.BalanceProperties[0]?.IsWorldEvergreen ?? false;
 
   return (
     <>
       <div className="container py-3" id="inputFields">
         <div className="row g-2 align-items-end">
           <div className="col-sm-4">
-            <label htmlFor="subzoneId" className="form-label">
+            <label
+              htmlFor="unlockedCheckpointsAndShafts"
+              className="form-label"
+            >
               Unlocked Checkpoints and Shafts
             </label>
             <input
-              className="form-control"
-              id="subzoneId"
+              className="gng-number-input"
+              id="unlockedCheckpointsAndShafts"
               readOnly
               value={projection.unlockedCheckpointsAndShafts}
             />
-          </div>
-          <div className="col-sm-4">
-            <label htmlFor="subzoneRank" className="form-label">
-              Rank Multiplier Row
-            </label>
-            <select
-              className="form-select"
-              id="subzoneRank"
-              onChange={(event) => setSelectedSubZoneId(event.target.value)}
-              value={selectedSubZoneId}
-            >
-              {Array.from({ length: maxSubZone }, (_value, index) => (
-                <option key={index} value={index}>
-                  {index + 1}
-                </option>
-              ))}
-            </select>
           </div>
           {card16 && (
             <div className="col-sm-3">
@@ -104,14 +80,21 @@ export function GachaView({
       </div>
 
       <div className="table-responsive gng-scroll-pane px-3">
-        {selectedSubZone && (
+        {selectedRankMultiplier && (
           <GachaTable
             cardIncreaseRareLvl={projection.gachaCardLevel}
-            gachaData={gachaChests}
-            subZoneData={selectedSubZone}
+            gachaData={projection.regularGachas}
+            isEvergreen={isEvergreen}
+            subZoneData={selectedRankMultiplier}
+            t={t}
           />
         )}
-        <ScriptedGachaTable gachaData={projection.scriptedGachas} />
+        <FixedGachaTable
+          balance={balance}
+          gachaData={projection.fixedGachas}
+          isEvergreen={isEvergreen}
+          t={t}
+        />
       </div>
     </>
   );
@@ -121,24 +104,31 @@ function GachaTable({
   gachaData,
   subZoneData,
   cardIncreaseRareLvl,
+  isEvergreen,
+  t,
 }: {
   gachaData: Gacha[];
   subZoneData: RankMultiplier;
   cardIncreaseRareLvl: number;
+  isEvergreen: boolean;
+  t: LocalizationLookup;
 }) {
   return (
-    <table className="table table-striped small gng-mineshaft-table">
+    <table className="table table-striped table-sm gng-mineshaft-table">
       <thead>
         <tr>
-          <th>GachaType</th>
-          <th>Common</th>
-          <th>Uncommon</th>
-          <th>Rare</th>
-          <th>EventEpic</th>
-          <th>Legendary</th>
-          <th>SoftCurrencyMin</th>
-          <th>SoftCurrencyMax</th>
-          <th>LeaderboardCurrency</th>
+          <th>Chest</th>
+          {isEvergreen && (
+            <>
+              <th>{t("card.rarity.common.singular", "Common")}</th>
+              <th>{t("card.rarity.uncommon.singular", "Uncommon")}</th>
+              <th>{t("card.rarity.rare.singular", "Rare")}</th>
+              <th>{t("card.rarity.eventepic.singular", "EventEpic")}</th>
+              <th>{t("card.rarity.legendary.singular", "Legendary")}</th>
+            </>
+          )}
+          <th>Elixir</th>
+          <th>Crowns</th>
         </tr>
       </thead>
       <tbody>
@@ -146,8 +136,10 @@ function GachaTable({
           <GachaRow
             cardIncreaseRareLvl={cardIncreaseRareLvl}
             gacha={gacha}
+            isEvergreen={isEvergreen}
             key={gacha.Id}
             subZoneData={subZoneData}
+            t={t}
           />
         ))}
       </tbody>
@@ -159,17 +151,20 @@ function GachaRow({
   gacha,
   subZoneData,
   cardIncreaseRareLvl,
+  isEvergreen,
+  t,
 }: {
   gacha: Gacha;
   subZoneData: RankMultiplier;
   cardIncreaseRareLvl: number;
+  isEvergreen: boolean;
+  t: LocalizationLookup;
 }) {
   const cardType = gachaTypes[gacha.GachaType];
-  const totalCards = Math.floor(
+  const totalCards =
     gacha.BaseNumCards *
-      Number(subZoneData[`GachaCardsMult${cardType}`]) *
-      cardIncreaseRareCoeff[cardIncreaseRareLvl],
-  );
+    Number(subZoneData[`GachaCardsMult${cardType}`]) *
+    cardIncreaseRareCoeff[cardIncreaseRareLvl];
   const totalUncommon = normalizeCardTotal(totalCards / gacha.UncommonWeight);
   const totalRare = normalizeCardTotal(totalCards / gacha.RareWeight);
   const totalEventEpic = normalizeCardTotal(totalCards / gacha.EventEpicWeight);
@@ -188,15 +183,20 @@ function GachaRow({
 
   return (
     <tr>
-      <td>{gacha.Id}</td>
-      <td>{totalCommon.toFixed(2)}</td>
-      <td>{totalUncommon.toFixed(2)}</td>
-      <td>{totalRare.toFixed(2)}</td>
-      <td>{totalEventEpic.toFixed(2)}</td>
-      <td>{totalLegendary.toFixed(5)}</td>
-      <td>{softCurrencyMin}</td>
-      <td>{softCurrencyMax}</td>
-      <td>{leaderboardCurrency}</td>
+      <td>{t(`gacha.name.${gacha.Id}`, gacha.Id)}</td>
+      {isEvergreen && (
+        <>
+          <td className="text-nowrap">{formatGachaCount(totalCommon)}</td>
+          <td className="text-nowrap">{formatGachaCount(totalUncommon)}</td>
+          <td className="text-nowrap">{formatGachaCount(totalRare)}</td>
+          <td className="text-nowrap">{formatGachaCount(totalEventEpic)}</td>
+          <td className="text-nowrap">{formatGachaCount(totalLegendary)}</td>
+        </>
+      )}
+      <td>
+        {numberFormat(softCurrencyMin)}-{numberFormat(softCurrencyMax)}
+      </td>
+      <td>{numberFormat(leaderboardCurrency)}</td>
     </tr>
   );
 }
@@ -205,30 +205,53 @@ function normalizeCardTotal(value: number): number {
   return Number.isFinite(value) ? value : 0;
 }
 
-function ScriptedGachaTable({ gachaData }: { gachaData: Gacha[] }) {
-  if (!gachaData.length) {
+function FixedGachaTable({
+  balance,
+  gachaData,
+  isEvergreen,
+  t,
+}: {
+  balance: Balance;
+  gachaData: Gacha[];
+  isEvergreen: boolean;
+  t: LocalizationLookup;
+}) {
+  if (!gachaData.length && !isEvergreen) {
     return null;
   }
+
+  const rarityByCard = new Map(
+    balance.Cards.map((card) => [card.Id, card.Rarity]),
+  );
 
   return (
     <table className="table table-striped table-sm mt-3">
       <thead>
         <tr>
-          <th>Id</th>
-          <th>Guaranteed Cards</th>
+          <th>ID</th>
+          <th>Cards</th>
           <th>Elixir</th>
           <th>Crowns</th>
         </tr>
       </thead>
       <tbody>
+        {isEvergreen && (
+          <tr>
+            <td>GachaLegendary</td>
+            <td>x1 Legendary Card</td>
+            <td>0</td>
+            <td>0</td>
+          </tr>
+        )}
         {gachaData.map((gacha) => (
           <tr key={gacha.Id}>
             <td>{gacha.Id}</td>
             <td>
-              {gacha.GuaranteedCardIds.map(
-                (cardId, index) =>
-                  `${cardId} x${gacha.GuaranteedCardCounts[index] ?? 0}`,
-              ).join(", ")}
+              {gacha.GuaranteedCardIds.map((cardId, index) => {
+                const count = gacha.GuaranteedCardCounts[index] ?? 0;
+                const rarity = rarityByCard.get(cardId);
+                return `x${count} ${t(`card.${cardId}.name`, cardId)} (${rarityName(rarity)})`;
+              }).join(", ")}
             </td>
             <td>{gacha.SoftCurrencyMin}</td>
             <td>{gacha.LeaderboardCurrency}</td>
@@ -237,4 +260,17 @@ function ScriptedGachaTable({ gachaData }: { gachaData: Gacha[] }) {
       </tbody>
     </table>
   );
+}
+
+function rarityName(rarity: number | undefined): string {
+  const names: Record<number, string> = {
+    1: "Common",
+    2: "Uncommon",
+    3: "Rare",
+    4: "EventEpic",
+    5: "Legendary",
+    6: "Majestic",
+    7: "Ancestral",
+  };
+  return rarity ? (names[rarity] ?? String(rarity)) : "-";
 }

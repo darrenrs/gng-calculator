@@ -1,20 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createDefaultActiveState } from "../src/client/game/activeStateTypes";
-import { buildMapProjection } from "../src/client/game/projections";
-import type { Balance } from "../src/client/game/sourceTypes";
+import { createDefaultActiveState } from "../src/client/types/activeStateTypes";
+import {
+  balanceIndexToCssGrid,
+  buildMapProjection,
+} from "../src/client/game/projections";
+import type { Balance } from "../src/client/types/sourceBalanceTypes";
 
-test("map projection preserves display order and builds bottom-left progression order", () => {
+test("map projection preserves BALANCE_ROOT source order for display", () => {
   const balance = balanceFixture();
   const state = createDefaultActiveState(balance);
   const projection = buildMapProjection(balance, state);
 
   assert.equal(projection.displayRows[0][0].token, "e:exit:3:exit");
-  assert.equal(projection.displayRows[1][0].token, "c:spawningcart:1");
-  assert.equal(projection.progressionCells[0].token, "c:spawningcart:1");
-  assert.equal(projection.progressionCells[2].token, "p:checkpoint:2:cp");
-  assert.equal(projection.progressionCells[7].token, "e:exit:3:exit");
+  assert.equal(projection.displayRows[4][0].token, "c:spawningcart:1");
+  assert.equal(projection.displayRows[3][5].token, "s:mine:1:gacha:card:2");
+  assert.equal(projection.displayRows[3][0].token, "p:checkpoint:2:cp");
 });
 
 test("map projection uses dynamic and static map object sizes", () => {
@@ -31,10 +33,10 @@ test("map projection uses dynamic and static map object sizes", () => {
   assertCellSize(cells, "e:exit:3:exit", 1, 3);
 });
 
-test("map projection places multi-cell objects upward from bottom-left anchor", () => {
+test("map projection places BALANCE_ROOT multi-cell objects up from lower-left source anchor", () => {
   const balance = balanceFixture();
   balance.Zones[0].Grid =
-    ".,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,.,s:mine:1:gacha:card:2,.,.,.,.,.,.,.";
+    ".,.,.,.,.,.,.,.,.,.,.,.,.,.,s:mine:1:gacha:card:2,.,.,.,.,.,.,.";
   const state = createDefaultActiveState(balance);
   const projection = buildMapProjection(balance, state);
   const cell = projection.displayRows
@@ -42,12 +44,105 @@ test("map projection places multi-cell objects upward from bottom-left anchor", 
     .find((item) => item.kind === "mineshaft");
 
   assert.ok(cell);
-  assert.equal(cell.row, 3);
+  assert.equal(cell.row, 0);
   assert.equal(cell.col, 0);
   assert.equal(cell.rowSpan, 3);
   assert.equal(cell.colSpan, 2);
-  assert.equal(cell.gridRowStart, 2);
+  assert.equal(cell.gridRowStart, 1);
   assert.equal(cell.gridColumnStart, 1);
+});
+
+test("balance index to CSS grid helper maps source-order corners", () => {
+  assert.deepEqual(balanceIndexToCssGrid(0, 3), {
+    saveCol: 1,
+    sourceRow: 1,
+    gridColumnStart: 1,
+    gridRowStart: 1,
+    colSpan: 1,
+    rowSpan: 1,
+  });
+  assert.deepEqual(balanceIndexToCssGrid(2, 3), {
+    saveCol: 3,
+    sourceRow: 1,
+    gridColumnStart: 3,
+    gridRowStart: 1,
+    colSpan: 1,
+    rowSpan: 1,
+  });
+  assert.deepEqual(balanceIndexToCssGrid(6, 3), {
+    saveCol: 1,
+    sourceRow: 3,
+    gridColumnStart: 1,
+    gridRowStart: 3,
+    colSpan: 1,
+    rowSpan: 1,
+  });
+  assert.deepEqual(balanceIndexToCssGrid(8, 3), {
+    saveCol: 3,
+    sourceRow: 3,
+    gridColumnStart: 3,
+    gridRowStart: 3,
+    colSpan: 1,
+    rowSpan: 1,
+  });
+  assert.deepEqual(balanceIndexToCssGrid(6, 3, 2, 3), {
+    saveCol: 1,
+    sourceRow: 3,
+    gridColumnStart: 1,
+    gridRowStart: 1,
+    colSpan: 2,
+    rowSpan: 3,
+  });
+});
+
+test("map projection keeps obstruction roots renderable and marks only covered cells", () => {
+  const balance = balanceFixture();
+  const state = createDefaultActiveState(balance);
+  const projection = buildMapProjection(balance, state);
+  const cells = projection.displayRows.flat();
+  const root = cells.find((item) => item.token === "x:block");
+
+  assert.ok(root);
+  assert.equal(root.kind, "obstruction");
+  assert.equal(root.covered, false);
+  assert.equal(root.rowSpan, 2);
+  assert.equal(root.colSpan, 3);
+  assert.equal(cells.filter((item) => item.covered).length >= 5, true);
+});
+
+test("shipped balance map spans do not cover other root tokens", () => {
+  const balanceFiles = [
+    "balance_arctic.json",
+    "balance_candy.json",
+    "balance_christmas.json",
+    "balance_easter.json",
+    "balance_evergreen.json",
+    "balance_halloween.json",
+    "balance_harvest.json",
+    "balance_jungle.json",
+    "balance_minicard.json",
+    "balance_minielixir.json",
+    "balance_minigem.json",
+    "balance_pirate.json",
+    "balance_space1.json",
+    "balance_space2.json",
+    "balance_summer.json",
+    "balance_valentine.json",
+    "balance_volcano.json",
+  ];
+
+  for (const file of balanceFiles) {
+    const balance = JSON.parse(
+      readFileSync(`balance/${file}`, "utf8"),
+    ) as Balance;
+    const state = createDefaultActiveState(balance, "zone1");
+    const projection = buildMapProjection(balance, state);
+    const coveredRoots = projection.displayRows
+      .flat()
+      .filter((cell) => cell.covered && cell.token && cell.token !== ".");
+
+    assert.deepEqual(coveredRoots, [], file);
+  }
 });
 
 test("rock map cells show level text without rock id detail", () => {
@@ -98,6 +193,8 @@ function balanceFixture(): Balance {
       {
         ThemeId: "fixture",
         IsWorldEvergreen: false,
+        RankUpType: 1,
+        BaseUnitCap: 10,
         AntiCheatSettings: { CoreCurrencyMax: 100000 },
         DeliveryDelaySecBase: 60,
         DeliveryDelaySecGrowth: 1,
@@ -165,13 +262,19 @@ function balanceFixture(): Balance {
         UpgradeCostMultiplier: 0,
         UpgradeCostFormulaType: 2,
         UpgradeCostGrowth: 1,
+        MinerIdCycle: [],
+        SpawnLevelOffset: 0,
+        SpawnDelaySecBase: 1,
+        SpawnDelaySecMultiplier: 0,
+        SpawnDelaySecGrowth: 0,
+        SpawnDelaySecFormulaType: 0,
       },
     ],
     GeneratorObjectives: [],
     Zones: [
       {
         Id: "zone1",
-        Grid: "e:exit:3:exit,x:block,r:rock:4,.,.,.,.,c:spawningcart:1,s:mine:1:gacha:card:2,p:checkpoint:2:cp,.,.,.,.",
+        Grid: "e:exit:3:exit,.,.,.,.,.,.,.,.,.,.,.,.,.,x:block,.,.,r:rock:4,.,.,.,p:checkpoint:2:cp,.,.,.,.,.,.,c:spawningcart:1,.,.,.,.,.,.,.,.,.,.,.,s:mine:1:gacha:card:2,.",
         RankMultipliers: [],
       },
     ],
@@ -181,6 +284,9 @@ function balanceFixture(): Balance {
     CheckPoint: [],
     Reinforcements: [],
     Deliveries: [],
-    Exit: {},
+    Miners: [],
+    MiningTargetHealths: [],
+    FreeGachaCycle: [],
+    Spells: [],
   };
 }

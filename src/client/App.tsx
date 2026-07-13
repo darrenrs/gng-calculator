@@ -8,8 +8,8 @@ import {
 import {
   createDefaultActiveState,
   type ActiveState,
-} from "./game/activeStateTypes";
-import type { AppViewId } from "./game/derivedTypes";
+} from "./types/activeStateTypes";
+import type { AppViewId } from "./types/derivedTypes";
 import { lookupLocalization, parseLocalization } from "./game/localization";
 import {
   buildCardProjections,
@@ -19,8 +19,9 @@ import {
   buildMapProjection,
   buildMineshaftProjections,
   buildSummaryProjection,
+  getSelectedRankMultiplier,
 } from "./game/projections";
-import type { Balance, LteScheduleEntry } from "./game/sourceTypes";
+import type { Balance, LteScheduleEntry } from "./types/sourceBalanceTypes";
 import { CardsView } from "./views/CardsView";
 import { DeliveriesView } from "./views/DeliveriesView";
 import { GachaView } from "./views/GachaView";
@@ -150,14 +151,17 @@ export function App() {
   );
   const deliveryProjection = useMemo(
     () =>
-      balance && activeState && summaryProjection
+      balance && activeState
         ? buildDeliveryProjection(
             balance,
             activeState,
-            summaryProjection.inactiveIncomePerSecond,
+            mineshaftProjections.reduce(
+              (total, mineshaft) => total + mineshaft.incomePerSecond,
+              0,
+            ),
           )
         : null,
-    [balance, activeState, summaryProjection],
+    [balance, activeState, mineshaftProjections],
   );
   const gachaProjection = useMemo(
     () =>
@@ -178,10 +182,10 @@ export function App() {
   function setCardLevel(cardId: string, level: number) {
     updateActiveState((state) => ({
       ...state,
-      cards: {
-        ...state.cards,
+      cardsInput: {
+        ...state.cardsInput,
         [cardId]: {
-          quantity: state.cards[cardId]?.quantity ?? 0,
+          quantity: state.cardsInput[cardId]?.quantity ?? 0,
           level,
         },
       },
@@ -191,10 +195,10 @@ export function App() {
   function setCardQuantity(cardId: string, quantity: number) {
     updateActiveState((state) => ({
       ...state,
-      cards: {
-        ...state.cards,
+      cardsInput: {
+        ...state.cardsInput,
         [cardId]: {
-          level: state.cards[cardId]?.level ?? 0,
+          level: state.cardsInput[cardId]?.level ?? 0,
           quantity,
         },
       },
@@ -204,8 +208,8 @@ export function App() {
   function setGeneratorLevel(generatorId: string, level: number) {
     updateActiveState((state) => ({
       ...state,
-      generators: {
-        ...state.generators,
+      generatorsInput: {
+        ...state.generatorsInput,
         [generatorId]: { level },
       },
     }));
@@ -213,7 +217,7 @@ export function App() {
 
   function setGeneratorOpened(generatorId: string, opened: boolean) {
     updateActiveState((state) => {
-      const ids = new Set(state.map.mineshaftIdsOpened);
+      const ids = new Set(state.mapInput.mineshaftIdsOpened);
       if (opened) {
         ids.add(generatorId);
       } else {
@@ -222,8 +226,8 @@ export function App() {
       ids.add("spawningcart");
       return {
         ...state,
-        map: {
-          ...state.map,
+        mapInput: {
+          ...state.mapInput,
           mineshaftIdsOpened: Array.from(ids),
         },
       };
@@ -233,14 +237,14 @@ export function App() {
   function setCheckpointCount(count: number) {
     updateActiveState((state) => ({
       ...state,
-      map: { ...state.map, checkpointsOpened: count },
+      mapInput: { ...state.mapInput, checkpointsOpened: count },
     }));
   }
 
   function setGoblinLevel(level: number) {
     updateActiveState((state) => ({
       ...state,
-      goblins: { ...state.goblins, currentGoblinLevel: level },
+      goblinsInput: { ...state.goblinsInput, currentGoblinLevel: level },
     }));
   }
 
@@ -253,14 +257,14 @@ export function App() {
             <span>G&amp;G Calculator</span>
           </a>
           <button
-            className="btn btn-outline-secondary gng-balance-button"
+            className="btn btn-primary gng-balance-button"
             type="button"
             onClick={() => setBalancePanelOpen((isOpen) => !isOpen)}
           >
             {balanceName}
           </button>
           <div className="flex-grow-1" />
-          <button className="btn btn-link" type="button">
+          <button className="btn btn-primary" type="button">
             About
           </button>
         </div>
@@ -291,6 +295,10 @@ export function App() {
       <main>
         {balance && activeState && (
           <div className="px-3 pt-3">
+            <p className="text-danger">
+              WARNING: This tool is not yet complete and may not return correct
+              data. Always cross-check with the game first.
+            </p>
             <label className="form-label" htmlFor="globalZoneSelect">
               Zone
             </label>
@@ -332,21 +340,24 @@ export function App() {
           activeState &&
           summaryProjection &&
           activeView === "summary" && (
-            <SummaryView
-              activeState={activeState}
-              checkpointMax={mapProjection?.checkpointCount ?? 0}
-              projection={summaryProjection}
-              onCheckpointCountChange={setCheckpointCount}
-              onGoblinLevelChange={setGoblinLevel}
-            />
+            <SummaryView projection={summaryProjection} />
           )}
-        {mapProjection && activeView === "map" && (
-          <MapView map={mapProjection} />
+        {mapProjection && activeState && activeView === "map" && (
+          <MapView
+            currentGoblinLevel={activeState.goblinsInput.currentGoblinLevel}
+            map={mapProjection}
+            onCheckpointCountChange={setCheckpointCount}
+            onGoblinLevelChange={setGoblinLevel}
+          />
         )}
         {balance && activeState && activeView === "mineshafts" && (
           <MineshaftsView
             balance={balance}
             mineshafts={mineshaftProjections}
+            objectiveElixirMultiplier={
+              getSelectedRankMultiplier(balance, activeState)
+                ?.GenObjectiveSoftCurrencyMultiplier ?? 1
+            }
             onCardLevelChange={setCardLevel}
             onGeneratorLevelChange={setGeneratorLevel}
             onGeneratorOpenedChange={setGeneratorOpened}
@@ -357,7 +368,6 @@ export function App() {
           <CardsView
             cards={cardProjections}
             onCardLevelChange={setCardLevel}
-            onCardQuantityChange={setCardQuantity}
             t={t}
           />
         )}
@@ -372,10 +382,10 @@ export function App() {
           gachaProjection &&
           activeView === "gacha" && (
             <GachaView
-              activeState={activeState}
               balance={balance}
               projection={gachaProjection}
               onCardLevelChange={setCardLevel}
+              t={t}
             />
           )}
         {activeView === "save" && <SaveView />}

@@ -2,12 +2,17 @@ import { useMemo, useState } from "react";
 import type {
   LocalizationLookup,
   MineshaftProjection,
-} from "../game/derivedTypes";
+} from "../types/derivedTypes";
 import { numberFormat, timeFormat } from "../game/format";
-import type { Balance } from "../game/sourceTypes";
+import {
+  calculateGeneratorObjectiveElixir,
+  generatorUpgradeCostRange,
+} from "../game/balanceCalculations";
+import type { Balance } from "../types/sourceBalanceTypes";
 
 interface MineshaftsViewProps {
   balance: Balance;
+  objectiveElixirMultiplier: number;
   mineshafts: MineshaftProjection[];
   onCardLevelChange: (cardId: string, level: number) => void;
   onGeneratorLevelChange: (generatorId: string, level: number) => void;
@@ -17,6 +22,7 @@ interface MineshaftsViewProps {
 
 export function MineshaftsView({
   balance,
+  objectiveElixirMultiplier,
   mineshafts,
   onCardLevelChange,
   onGeneratorLevelChange,
@@ -40,10 +46,11 @@ export function MineshaftsView({
               <th>Open</th>
               <th>Level</th>
               <th>Managers</th>
-              <th>Next Objective Cost</th>
               <th>Income / Cycle</th>
-              <th>Time</th>
-              <th>Income / Sec</th>
+              <th>Cycle Time</th>
+              <th>Upgrade Cost</th>
+              <th>Idle Time to Upgrade</th>
+              <th>Active Time to Upgrade</th>
             </tr>
           </thead>
           <tbody>
@@ -81,7 +88,13 @@ export function MineshaftsView({
             </select>
           </div>
         </div>
-        {selected && <UpgradeTable balance={balance} mineshaft={selected} />}
+        {selected && (
+          <UpgradeTable
+            balance={balance}
+            mineshaft={selected}
+            objectiveElixirMultiplier={objectiveElixirMultiplier}
+          />
+        )}
       </section>
     </div>
   );
@@ -102,7 +115,7 @@ function MineshaftRow({
 }) {
   const disabled = !mineshaft.existsInSelectedZone;
   return (
-    <tr className={disabled ? "text-secondary" : ""}>
+    <tr className={disabled ? "gng-mineshaft-row-unavailable" : ""}>
       <td>{displayName(mineshaft.id, t)}</td>
       <td>
         <input
@@ -114,20 +127,22 @@ function MineshaftRow({
           }
         />
       </td>
-      <td className="gng-level-cell">
-        <input
-          className="form-control form-control-sm"
-          disabled={disabled}
-          min={1}
-          type="number"
-          value={mineshaft.level}
-          onChange={(event) =>
-            onGeneratorLevelChange(
-              mineshaft.id,
-              Math.max(1, Number(event.target.value)),
-            )
-          }
-        />
+      <td className="gng-level-cell-td">
+        <div className="gng-level-cell">
+          <input
+            className="form-control form-control-sm"
+            disabled={disabled}
+            min={1}
+            type="number"
+            value={mineshaft.level}
+            onChange={(event) =>
+              onGeneratorLevelChange(
+                mineshaft.id,
+                Math.max(1, Number(event.target.value)),
+              )
+            }
+          />
+        </div>
       </td>
       <td>
         {mineshaft.managers.map((manager) => (
@@ -160,14 +175,23 @@ function MineshaftRow({
           </div>
         ))}
       </td>
+      <td>{numberFormat(mineshaft.incomePerCycle)}</td>
+      <td>{timeFormat(mineshaft.cycleSeconds)}</td>
       <td>
         {mineshaft.nextObjectiveCost === null
           ? "-"
           : numberFormat(mineshaft.nextObjectiveCost)}
       </td>
-      <td>{numberFormat(mineshaft.incomePerCycle)}</td>
-      <td>{timeFormat(mineshaft.cycleSeconds)}</td>
-      <td>{numberFormat(mineshaft.incomePerSecond)}</td>
+      <td>
+        {mineshaft.idleTimeToUpgrade === null
+          ? "-"
+          : timeFormat(mineshaft.idleTimeToUpgrade)}
+      </td>
+      <td>
+        {mineshaft.activeTimeToUpgrade === null
+          ? "-"
+          : timeFormat(mineshaft.activeTimeToUpgrade)}
+      </td>
     </tr>
   );
 }
@@ -175,9 +199,11 @@ function MineshaftRow({
 function UpgradeTable({
   balance,
   mineshaft,
+  objectiveElixirMultiplier,
 }: {
   balance: Balance;
   mineshaft: MineshaftProjection;
+  objectiveElixirMultiplier: number;
 }) {
   const rows = useMemo(() => {
     const objective = balance.GeneratorObjectives.find(
@@ -187,39 +213,45 @@ function UpgradeTable({
       return [];
     }
     let level = 1;
+    const maxCurrency =
+      balance.BalanceProperties[0]?.AntiCheatSettings?.CoreCurrencyMax ??
+      Infinity;
     return objective.ObjectiveCount.map((count, index) => {
       const from = level;
       const to = level + count;
       level = to;
       return {
-        from,
-        to,
+        objective: to,
         multiplier: objective.CoreCurrencyMultiplier[index] ?? 1,
-        cost: upgradeCostRange(mineshaft.source, from, to),
+        cost: generatorUpgradeCostRange(mineshaft.source, from, to),
+        elixir: calculateGeneratorObjectiveElixir(
+          balance,
+          mineshaft.id,
+          index,
+          objectiveElixirMultiplier,
+        ),
       };
-    });
-  }, [balance, mineshaft]);
+    }).filter((row) => row.cost <= maxCurrency);
+  }, [balance, mineshaft, objectiveElixirMultiplier]);
 
   return (
     <div className="table-responsive">
       <table className="table table-sm">
         <thead>
           <tr>
-            <th>From</th>
-            <th>To</th>
+            <th>Objective</th>
+            <th>Multiplier</th>
             <th>Cost</th>
             <th>Elixir Gained</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={`${row.from}-${row.to}`}>
-              <td>{row.from}</td>
-              <td>
-                {row.to} (x{row.multiplier})
-              </td>
+            <tr key={row.objective}>
+              <td>{row.objective}</td>
+              <td>x{row.multiplier}</td>
               <td>{numberFormat(row.cost)}</td>
-              <td>TBD</td>
+              <td>{row.elixir === null ? "-" : numberFormat(row.elixir)}</td>
             </tr>
           ))}
         </tbody>
@@ -228,21 +260,9 @@ function UpgradeTable({
   );
 }
 
-function upgradeCostRange(
-  source: MineshaftProjection["source"],
-  from: number,
-  to: number,
-): number {
-  let total = 0;
-  for (let level = from; level < to; level += 1) {
-    total += source.UpgradeCostBase * source.UpgradeCostGrowth ** (level - 1);
-  }
-  return total;
-}
-
 function displayName(id: string, t: LocalizationLookup): string {
   if (id === "spawningcart") {
-    return "Spawning Cart";
+    return "Forge";
   }
   return t(`generator.${id}.name`, titleCase(id));
 }

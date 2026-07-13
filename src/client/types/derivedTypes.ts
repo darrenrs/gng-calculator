@@ -1,4 +1,11 @@
-import type { Card, Delivery, Gacha, MineShaft, Rock } from "./sourceTypes";
+import type {
+  Card,
+  Delivery,
+  Gacha,
+  MineShaft,
+  RankMultiplier,
+  Rock,
+} from "./sourceBalanceTypes";
 
 export type LocalizationLookup = (key: string, fallback?: string) => string;
 
@@ -15,7 +22,10 @@ export type MineshaftProjection = {
   incomePerCycle: number;
   cycleSeconds: number;
   incomePerSecond: number;
+  activeIncomePerSecond: number;
   nextObjectiveCost: number | null;
+  activeTimeToUpgrade: number | null;
+  idleTimeToUpgrade: number | null;
 };
 
 export type ManagerProjection = {
@@ -31,13 +41,69 @@ export type CardProjection = {
   quantity: number;
   maxLevel: number;
   effect: number;
+  effectLabel: string;
+  elixirAllocated: number;
+  elixirRemaining: number;
 };
 
 export type SummaryProjection = {
+  zoneId: string;
   checkpointsOpened: number;
   currentGoblinLevel: number;
-  inactiveIncomePerSecond: number;
+  idleIncomePerSecond: number;
   activeIncomePerSecond: number;
+  rankUpType: string;
+  rankMultiplierIndex: number;
+  globalRank: number;
+  globalEffects: GlobalEffectProjection[];
+  derivedCalculations: DerivedCalculationProjection[];
+  rankMultiplierRows: RankMultiplierProjection[];
+};
+
+export type GlobalEffectId =
+  | "GoblinLimit"
+  | "GoblinPurchasePrice"
+  | "GoblinPurchaseLevel"
+  | "GoblinBaseDamage"
+  | "GoblinCannonTimer"
+  | "GeneratorCurrencyMult"
+  | "RockCurrencyMult"
+  | "DeliveryCurrencyMult"
+  | "ProdTimePercentDecrease"
+  | "CardsMult"
+  | "LteRewardsMult"
+  | "DeliveryDynamiteMult"
+  | "RockDoubleGemsPercentChance"
+  | "DynamiteBaseDamage"
+  | "RockLegendaryChestMult"
+  | "CrusherSpeedMult"
+  | "CrusherBombInterval"
+  | "GoblinKingDamageModifier";
+
+export type NamedGlobalEffects = Record<GlobalEffectId, number>;
+
+export type GlobalEffectProjection = {
+  id: GlobalEffectId;
+  label: string;
+  value: number;
+  valueLabel: string;
+};
+
+export type DerivedCalculationProjection = {
+  id: string;
+  label: string;
+  value: number;
+  valueLabel: string;
+};
+
+export type RankMultiplierProjection = {
+  id: keyof RankMultiplier;
+  value: number;
+};
+
+export type DerivedRankState = {
+  rankMultiplierIndex: number;
+  globalRank: number;
 };
 
 export type MapProjection = {
@@ -48,6 +114,8 @@ export type MapProjection = {
   columnCount: number;
   mineshaftIdsInZone: string[];
   checkpointCount: number;
+  checkpointsOpened: number;
+  maxGoblinCount: number;
 };
 
 export type MapDisplayCell = {
@@ -78,11 +146,19 @@ export type MapCellKind =
   | "spawningCart"
   | "checkpoint"
   | "exit"
+  | "barrelGoblin"
+  | "barrelDelivery"
+  | "dynamite"
+  | "goblin"
+  | "reward"
+  | "goblinKing"
   | "unknown";
 
 export type GoblinCostProjection = {
   labels: number[];
   rows: GoblinCostRow[];
+  maxGoblinCount: number;
+  spawnIntervalSeconds: number;
 };
 
 export type GoblinCostRow = {
@@ -96,6 +172,8 @@ export type DeliveryProjection = {
   obtained: number;
   total: number;
   activeIncomePerSecond: number;
+  claimCountResetSeconds: number;
+  maxDupesResetSeconds: number;
 };
 
 export type DeliveryRowProjection = {
@@ -110,8 +188,11 @@ export type DeliveryRowProjection = {
 
 export type GachaProjection = {
   unlockedCheckpointsAndShafts: number;
+  rankMultiplierIndex: number;
+  selectedRankMultiplier?: RankMultiplier;
   gachaCardLevel: number;
-  scriptedGachas: Gacha[];
+  regularGachas: Gacha[];
+  fixedGachas: Gacha[];
 };
 
 export type RockProjection = {

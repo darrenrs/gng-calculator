@@ -1,5 +1,6 @@
 export type LocalizationMap = Record<string, string>;
 
+// Initial localization parse
 export function parseLocalization(text: string): LocalizationMap {
   const values: LocalizationMap = {};
 
@@ -23,16 +24,17 @@ export function parseLocalization(text: string): LocalizationMap {
   return values;
 }
 
+// Localization query (with optional fallback value if key not found)
 export function lookupLocalization(
   values: LocalizationMap,
   key: string,
-  fallback = key,
+  fallback: string = key,
 ): string {
   if (key === "theme.space1.name") {
-    return "Space (Left)";
+    return "Lunar Gold Rush (Left)";
   }
   if (key === "theme.space2.name") {
-    return "Space (Right)";
+    return "Lunar Gold Rush (Right)";
   }
   return values[key] ?? fallback;
 }

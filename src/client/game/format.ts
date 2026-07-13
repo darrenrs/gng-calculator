@@ -1,3 +1,4 @@
+// Global number formatting function
 export function numberFormat(n: number): string {
   if (typeof n !== "number") {
     return String(NaN);
@@ -26,38 +27,55 @@ export function numberFormat(n: number): string {
   return `${significantFigures} ${suffix}`;
 }
 
-export function timeFormat(seconds: number): string {
-  if (!Number.isFinite(seconds)) {
+// Global time formatting function
+export function timeFormat(s: number, zeroMeansBase: boolean = false): string {
+  if (typeof s !== "number") {
+    return String(NaN);
+  }
+
+  if (zeroMeansBase && !s) {
+    return "0s";
+  }
+
+  if (!Number.isFinite(s)) {
     return "-";
   }
-  if (seconds >= 31_560_000) {
-    const years = Math.floor(seconds / 31_560_000);
-    const days = Math.floor((seconds % 31_560_000) / 86_400);
-    return `${years}y ${String(days).padStart(3, "0")}d`;
-  }
-  if (seconds >= 864_000) {
-    return `${Math.floor(seconds / 86_400)}d`;
-  }
-  if (seconds >= 86_400) {
-    const days = Math.floor(seconds / 86_400);
-    const hours = Math.floor((seconds % 86_400) / 3_600);
+
+  if (s >= 31_560_000 * 1_000_000_000_000) {
+    return "Forever";
+  } else if (s >= 31_560_000) {
+    const years = Math.floor(s / 31_560_000);
+    const yearsSuffix = ["Ga", "Ma", "ka", "a"];
+
+    const yearsLogThousand = Math.floor(Math.log(years) / Math.log(1000));
+    const yearsBaseAfterLog = Math.floor(years / 1000 ** yearsLogThousand);
+
+    return `${yearsBaseAfterLog}${yearsSuffix[yearsSuffix.length - 1 - yearsLogThousand]}`;
+  } else if (s >= 864_000) {
+    return `${Math.floor(s / 86_400)}d`;
+  } else if (s >= 86_400) {
+    const days = Math.floor(s / 86_400);
+    const hours = Math.floor((s % 86_400) / 3_600);
     return `${days}d ${String(hours).padStart(2, "0")}h`;
-  }
-  if (seconds >= 3_600) {
-    const hours = Math.floor(seconds / 3_600);
-    const minutes = Math.floor((seconds % 3_600) / 60);
+  } else if (s >= 3_600) {
+    const hours = Math.floor(s / 3_600);
+    const minutes = Math.floor((s % 3_600) / 60);
     return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  } else if (s >= 60) {
+    const minutes = Math.floor(s / 60);
+    const seconds = Math.floor(s % 60);
+    return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  } else if (s >= 5) {
+    return `${Math.floor(s)}s`;
+  } else if (s >= 1) {
+    return `${s.toPrecision(2)}s`;
+  } else if (s >= 0.001) {
+    return `${Math.round(s * 1000)}ms`;
+  } else {
+    return "Instant";
   }
-  if (seconds >= 60) {
-    const minutes = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${minutes}m ${String(secs).padStart(2, "0")}s`;
-  }
-  if (seconds >= 1) {
-    return `${Math.floor(seconds)}s`;
-  }
-  if (seconds >= 0.001) {
-    return `${Math.round(seconds * 1000)}ms`;
-  }
-  return "instant";
+}
+
+export function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
