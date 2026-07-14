@@ -14,7 +14,7 @@ test("default active state uses balance defaults and keeps spawning cart opened"
   assert.equal(state.maximumCurrency, 1e100);
   assert.deepEqual(state.mapInput.mineshaftIdsOpened, [FORGE_ID]);
   assert.equal(state.generatorsInput[FORGE_ID].level, 1);
-  assert.equal(state.goblinsInput.currentGoblinLevel, 1);
+  assert.equal(state.goblinsInput.goblinPurchaseLevel, 1);
 });
 
 function balanceSample(): Balance {

@@ -9,7 +9,12 @@ import {
   sortedCards,
 } from "./balanceCalculations";
 import { calculateFormula, calculateStatModifier } from "./modifiers";
-import { numberFormat, timeFormat, titleCase } from "./format";
+import {
+  coefficientFormat,
+  numberFormat,
+  timeFormat,
+  titleCase,
+} from "./format";
 import type { ActiveState } from "../types/activeStateTypes";
 import { FORGE_ID } from "../types/activeStateTypes";
 import type {
@@ -19,6 +24,7 @@ import type {
   DeliveryRowProjection,
   GachaProjection,
   GoblinCostProjection,
+  LocalizationLookup,
   MapProjection,
   MineshaftProjection,
   SummaryProjection,
@@ -43,6 +49,8 @@ import {
   mapTokenParts,
   zoneCheckpointCount,
   zoneMineshaftIds,
+  zoneMineshaftIdsUnlockedByCheckpoints,
+  zoneRankUnlocks,
 } from "./map";
 
 export { balanceIndexToCssGrid, buildMapProjection } from "./map";
@@ -62,9 +70,50 @@ const RANK_MULTIPLIER_KEYS: Array<keyof RankMultiplier> = [
   "MiningSoftCurrencyMultiplier",
 ];
 
+const GLOBAL_EFFECT_STAT_TYPES: Record<GlobalEffectId, StatModifierType[]> = {
+  GoblinLimitChange: [StatModifierType.MinerUnitCapAddition],
+  GoblinPurchasePrice: [
+    StatModifierType.ReinforcementsCostDivider,
+    StatModifierType.ReinforcementsCostDividerPerCheckPoint,
+  ],
+  GoblinPurchaseLevelChange: [StatModifierType.ReinforcementsLevelAddition],
+  GoblinBaseDamage: [
+    StatModifierType.MinerCritChanceAddition,
+    StatModifierType.MinerCritPowerMult,
+    StatModifierType.AncestralPowerMult,
+  ],
+  GoblinCannonTimerChange: [
+    StatModifierType.MinerSpawnTimeReduction,
+    StatModifierType.MinerSpawnTimeReductionPerCheckPoint,
+  ],
+  GeneratorCurrencyMult: [
+    StatModifierType.CoreCurrencyMultAllGenerators,
+    StatModifierType.CoreCurrencyMultAllGenPerCheckPoint,
+  ],
+  RockCurrencyMult: [StatModifierType.CoreCurrencyPercentAllRocks],
+  DeliveryCurrencyMult: [StatModifierType.CoreCurrencyPercentDeliveries],
+  ProdTimePercentDecrease: [
+    StatModifierType.ProdTimeInversePercentAllGenerators,
+  ],
+  CardsMult: [StatModifierType.CardsMultAllGacha],
+  LteRewardsMult: [StatModifierType.LteRewardsMult],
+  DeliveryDynamiteMult: [StatModifierType.DynamiteDropChanceAddition],
+  RockDoubleGemsPercentChance: [
+    StatModifierType.HardCurrencyDoubledDropChanceAddition,
+  ],
+  DynamiteBaseDamage: [StatModifierType.DynamitePowerMult],
+  RockLegendaryChestMult: [
+    StatModifierType.RockLegendaryChestDropChanceAddition,
+  ],
+  CrusherSpeedMult: [StatModifierType.CrusherSpeedAddition],
+  CrusherBombInterval: [StatModifierType.CrusherBombReduction],
+  GoblinKingDamageModifier: [StatModifierType.GoblinKing],
+};
+
 export function buildCardProjections(
   balance: Balance,
   activeState: ActiveState,
+  t?: LocalizationLookup,
 ): CardProjection[] {
   return sortedCards(balance).map((card) => {
     const level = activeState.cardsInput[card.Id]?.level ?? 0;
@@ -72,16 +121,22 @@ export function buildCardProjections(
       balance.CardUpgradeCosts.find((item) => item.Rarity === card.Rarity)
         ?.SoftCurrency ?? [];
     const spentCount = Math.max(0, level - 1);
-    const effect = calculateStatModifier(card, level);
+    const maxLevel = maxCardLevel(balance, card);
+    const isGoblinKing = card.StatModifierType === StatModifierType.GoblinKing;
+    const effect =
+      isGoblinKing && level === 0 ? 0 : calculateStatModifier(card, level);
     return {
       card,
       level,
       quantity: activeState.cardsInput[card.Id]?.quantity ?? 0,
-      maxLevel: maxCardLevel(balance, card),
+      maxLevel,
       effect,
       effectLabel: formatModifierValue(effect, card.StatModifierType),
       elixirAllocated: sum(upgradeCosts.slice(0, spentCount)),
       elixirRemaining: sum(upgradeCosts.slice(spentCount)),
+      unlockLabel: cardUnlockLabel(balance, card, t),
+      displayLevel: isGoblinKing ? Math.max(0, level - 1) : level,
+      displayMaxLevel: isGoblinKing ? Math.max(0, maxLevel - 1) : maxLevel,
     };
   });
 }
@@ -99,6 +154,15 @@ export function buildMineshaftProjections(
   );
   const zoneMineshaftIds = new Set(map.mineshaftIdsInZone);
   const openedIds = new Set(activeState.mapInput.mineshaftIdsOpened);
+  const zone =
+    balance.Zones.find((item) => item.Id === activeState.selectedZoneId) ??
+    balance.Zones[0];
+  const requiredOpenIds = new Set(
+    zoneMineshaftIdsUnlockedByCheckpoints(
+      zone,
+      activeState.mapInput.checkpointsOpened - 1,
+    ),
+  );
 
   const rows = getGenerators(balance).map(({ id, source }) => {
     const level = activeState.generatorsInput[id]?.level ?? 1;
@@ -146,6 +210,7 @@ export function buildMineshaftProjections(
       })),
       existsInSelectedZone,
       opened,
+      requiredOpen: id === FORGE_ID || requiredOpenIds.has(id),
       automated,
       automationCardId: automation?.cardId,
       automationLevel: automation?.automationLevel,
@@ -176,6 +241,14 @@ export function buildMineshaftProjections(
 
   return rows.map((row) => ({
     ...row,
+    idleIncomePercent:
+      idleIncomePerSecond > 0
+        ? (row.incomePerSecond / idleIncomePerSecond) * 100
+        : 0,
+    activeIncomePercent:
+      activeIncomePerSecond > 0
+        ? (row.activeIncomePerSecond / activeIncomePerSecond) * 100
+        : 0,
     idleTimeToUpgrade:
       row.nextObjectiveCost !== null && idleIncomePerSecond > 0
         ? row.nextObjectiveCost / idleIncomePerSecond
@@ -213,45 +286,65 @@ export function buildSummaryProjection(
     rank,
   );
   const spawnIntervalSeconds = goblinSpawnIntervalSeconds(balance, activeState);
+  const zoneNumber = Math.max(
+    1,
+    balance.Zones.findIndex((zone) => zone.Id === activeState.selectedZoneId) +
+      1,
+  );
+  const goblinCannonLevel = getGoblinCannonLevel(balance, activeState);
   const activeIncomePerSecond =
     activeGeneratorIncomePerSecond + activeDeliveryIncomePerSecond;
 
   return {
+    balanceId: balance.Id,
+    zoneNumber,
     zoneId: activeState.selectedZoneId,
     checkpointsOpened: activeState.mapInput.checkpointsOpened,
-    currentGoblinLevel: activeState.goblinsInput.currentGoblinLevel,
+    goblinPurchaseLevel: activeState.goblinsInput.goblinPurchaseLevel,
+    goblinCannonLevel,
     idleIncomePerSecond: idleIncomePerSecond,
     activeIncomePerSecond,
+    deliveriesPerHour: deliveriesPerHour(balance),
     rankUpType: rankUpTypeName(balance.BalanceProperties[0]?.RankUpType),
     rankMultiplierIndex: rank.rankMultiplierIndex,
     globalRank: rank.globalRank,
-    globalEffects: buildGlobalEffectProjections(effects),
+    globalEffects: buildGlobalEffectProjections(balance, effects),
     derivedCalculations: [
       derivedRow(
         "GoblinLimit",
         "Goblin Limit (Max Goblins)",
-        (balance.BalanceProperties[0]?.BaseUnitCap ?? 0) + effects.GoblinLimit,
-      ),
-      derivedRow(
-        "GoblinPurchasePrice",
-        "Goblin Purchase Price Divider",
-        effects.GoblinPurchasePrice,
-        `/${numberFormat(effects.GoblinPurchasePrice)}`,
+        (balance.BalanceProperties[0]?.BaseUnitCap ?? 0) +
+          effects.GoblinLimitChange,
       ),
       derivedRow(
         "GoblinPurchaseLevel",
         "Goblin Purchase Level",
-        effects.GoblinPurchaseLevel,
-        `+${numberFormat(effects.GoblinPurchaseLevel)}`,
+        activeState.goblinsInput.goblinPurchaseLevel,
       ),
+      derivedRow("GoblinCannonLevel", "Goblin Spawn Level", goblinCannonLevel),
       derivedRow(
-        "GoblinSpawnInterval",
-        "Goblin Spawn Interval",
+        "GoblinCannonTimer",
+        "Goblin Spawn Time",
         spawnIntervalSeconds,
         timeFormat(spawnIntervalSeconds, true),
       ),
-      derivedRow("IdleIncome", "Idle Income / Sec", idleIncomePerSecond),
-      derivedRow("ActiveIncome", "Active Income / Sec", activeIncomePerSecond),
+      derivedRow("RawIncomePerSec", "Idle Income / Sec", idleIncomePerSecond),
+      derivedRow(
+        "MineshaftsOpened",
+        "Total number of mineshafts opened",
+        new Set(activeState.mapInput.mineshaftIdsOpened).size,
+      ),
+      derivedRow(
+        "CheckpointsOpened",
+        "Total number of checkpoints opened",
+        activeState.mapInput.checkpointsOpened,
+      ),
+      derivedRow(
+        "RankMultiplierIndex",
+        "Index used for rank multipliers",
+        rank.rankMultiplierIndex,
+      ),
+      derivedRow("GlobalRank", "Index used for global rank", rank.globalRank),
     ],
     rankMultiplierRows: selectedRankMultiplier
       ? RANK_MULTIPLIER_KEYS.map((id) => ({
@@ -310,6 +403,33 @@ export function getSelectedRankMultiplier(
   return zone?.RankMultipliers[rank.rankMultiplierIndex];
 }
 
+export function getGoblinCannonLevel(
+  balance: Balance,
+  activeState: ActiveState,
+): number {
+  return Math.max(
+    1,
+    activeState.goblinsInput.goblinPurchaseLevel +
+      (balance.SpawningCart[0]?.SpawnLevelOffset ?? 0),
+  );
+}
+
+export function deliveriesPerHour(balance: Balance): number {
+  const props = balance.BalanceProperties[0];
+  if (!props || props.DeliveryDelaySecBase <= 0) return 0;
+
+  let cumulativeSeconds = 0;
+  let count = 0;
+  while (count < 100_000) {
+    const delay =
+      props.DeliveryDelaySecBase * props.DeliveryDelaySecGrowth ** count;
+    if (!Number.isFinite(delay) || cumulativeSeconds + delay > 3600) break;
+    cumulativeSeconds += delay;
+    count += 1;
+  }
+  return count;
+}
+
 export function buildGoblinCostProjection(
   balance: Balance,
   activeState: ActiveState,
@@ -317,6 +437,8 @@ export function buildGoblinCostProjection(
   const reinforcement = balance.Reinforcements[0];
   if (!reinforcement) {
     return {
+      goblinPurchaseLevel: activeState.goblinsInput.goblinPurchaseLevel,
+      minimumGoblinPurchaseLevel: 1,
       labels: [],
       rows: [],
       maxGoblinCount: maxGoblinCount(balance, activeState),
@@ -335,7 +457,7 @@ export function buildGoblinCostProjection(
   const maxCurrency = activeState.maximumCurrency;
   const rows = [];
   const effects = buildNamedGlobalEffects(balance, activeState);
-  const levelOffset = effects.GoblinPurchaseLevel;
+  const levelOffset = effects.GoblinPurchaseLevelChange;
   const costDivider = effects.GoblinPurchasePrice;
 
   for (let baseLevel = 1; baseLevel < 10_000; baseLevel += 1) {
@@ -358,6 +480,8 @@ export function buildGoblinCostProjection(
   }
 
   return {
+    goblinPurchaseLevel: activeState.goblinsInput.goblinPurchaseLevel,
+    minimumGoblinPurchaseLevel: Math.max(1, levelOffset + 1),
     labels,
     rows,
     maxGoblinCount: maxGoblinCount(balance, activeState),
@@ -371,7 +495,7 @@ export function buildDeliveryProjection(
   incomePerSecond: number,
 ): DeliveryProjection {
   const globalRank = buildDerivedRankState(balance, activeState).globalRank;
-  const rows = balance.Deliveries.map((delivery) =>
+  const initialRows = balance.Deliveries.map((delivery) =>
     buildDeliveryRow(
       balance,
       activeState,
@@ -380,6 +504,16 @@ export function buildDeliveryProjection(
       globalRank,
     ),
   );
+  const unlockedWeight = initialRows.reduce(
+    (total, row) => total + (row.unlocked ? row.oddsWeight : 0),
+    0,
+  );
+  const rows = initialRows.map((row) => ({
+    ...row,
+    nextDeliveryPercent: row.unlocked
+      ? (row.oddsWeight / unlockedWeight) * 100
+      : 0,
+  }));
   const obtained = rows.reduce((total, row) => total + row.count, 0);
   const total = rows.reduce(
     (sum, row) => sum + (row.total === -1 ? 0 : row.total),
@@ -427,7 +561,12 @@ export function buildGachaProjection(
     ),
     fixedGachas: balance.Gacha.filter(
       (gacha) =>
-        gacha.GachaType === GachaType.Fixed || gacha.GuaranteedCardIds?.length,
+        (gacha.GachaType === GachaType.Fixed ||
+          gacha.GuaranteedCardIds?.length) &&
+        !(
+          balance.BalanceProperties[0]?.IsWorldEvergreen &&
+          gacha.Id === "GachaLegendary"
+        ),
     ),
   };
 }
@@ -480,6 +619,12 @@ function buildDeliveryRow(
   globalRank: number,
 ): DeliveryRowProjection {
   const rewardName = deliveryName(delivery);
+  const reward = deliveryReward(delivery);
+  const effects = buildNamedGlobalEffects(balance, activeState);
+  const oddsWeight =
+    reward.DetailedType === "Dynamite"
+      ? Math.round(delivery.Weight * effects.DeliveryDynamiteMult)
+      : delivery.Weight;
   return {
     source: delivery,
     rewardName,
@@ -490,7 +635,10 @@ function buildDeliveryRow(
       incomePerSecond,
       globalRank,
     ),
-    weight: delivery.Weight,
+    rawWeight: delivery.Weight,
+    oddsWeight,
+    nextDeliveryPercent: 0,
+    unlocked: globalRank >= delivery.RankUnlock,
     count: 0,
     total: delivery.MaxDupes,
   };
@@ -521,15 +669,19 @@ function deliveryValue(
     case "tinygoblin":
       return {
         valueLabel: String(
-          Math.max(1, activeState.goblinsInput.currentGoblinLevel - 1),
+          Math.max(
+            1,
+            activeState.goblinsInput.goblinPurchaseLevel +
+              delivery.QuantityBase,
+          ),
         ),
         numericValue: Math.max(
           1,
-          activeState.goblinsInput.currentGoblinLevel - 1,
+          activeState.goblinsInput.goblinPurchaseLevel + delivery.QuantityBase,
         ),
       };
     case "Soft":
-      return { valueLabel: "Unknown", numericValue: null };
+      return { valueLabel: "??", numericValue: null };
     case "Core": {
       const deliveryCurrencyMult = buildNamedGlobalEffects(
         balance,
@@ -542,7 +694,7 @@ function deliveryValue(
       return { valueLabel: numberFormat(numericValue), numericValue };
     }
     case "Dynamite":
-      return { valueLabel: "Highest Goblin Level", numericValue: null };
+      return { valueLabel: "1", numericValue: 1 };
     default:
       return { valueLabel: "-", numericValue: null };
   }
@@ -596,7 +748,8 @@ function activeDeliveryIncomePerSecond(
 
   const orderedRows = rows
     .map((row, index) => ({ row, index }))
-    .sort((a, b) => b.row.weight - a.row.weight || a.index - b.index)
+    .filter(({ row }) => row.unlocked)
+    .sort((a, b) => b.row.oddsWeight - a.row.oddsWeight || a.index - b.index)
     .map(({ row }) => row);
   let time = 0;
   let claimCount = 0;
@@ -648,18 +801,20 @@ function goblinSpawnIntervalSeconds(
     growth: spawningCart.SpawnDelaySecGrowth,
   });
 
-  return base - buildNamedGlobalEffects(balance, activeState).GoblinCannonTimer;
+  return (
+    base - buildNamedGlobalEffects(balance, activeState).GoblinCannonTimerChange
+  );
 }
 
 const GLOBAL_EFFECT_LABELS: Record<GlobalEffectId, string> = {
-  GoblinLimit: "Goblin Count Limit",
+  GoblinLimitChange: "Goblin Limit Change",
   GoblinPurchasePrice: "Goblin Discount",
-  GoblinPurchaseLevel: "Goblin Purchase Level",
+  GoblinPurchaseLevelChange: "Goblin Purchase Level Change",
   GoblinBaseDamage: "Goblin Base Damage",
-  GoblinCannonTimer: "Goblin Spawn Time Reduction",
+  GoblinCannonTimerChange: "Goblin Spawn Time Reduction",
   GeneratorCurrencyMult: "Global Generator Currency Multiplier",
-  RockCurrencyMult: "Rock Currency Percentage Increase",
-  DeliveryCurrencyMult: "Delivery Currency Percentage Increase",
+  RockCurrencyMult: "Rock Currency Multiplier",
+  DeliveryCurrencyMult: "Delivery Currency Multiplier",
   ProdTimePercentDecrease: "Production Time Percentage Decrease",
   CardsMult: "Chest Card Count Multiplier",
   LteRewardsMult: "Event Rewards Multiplier",
@@ -673,30 +828,34 @@ const GLOBAL_EFFECT_LABELS: Record<GlobalEffectId, string> = {
 };
 
 function buildGlobalEffectProjections(
+  balance: Balance,
   effects: NamedGlobalEffects,
 ): SummaryProjection["globalEffects"] {
-  return (Object.keys(GLOBAL_EFFECT_LABELS) as GlobalEffectId[]).map((id) => ({
-    id,
-    label: GLOBAL_EFFECT_LABELS[id],
-    value: effects[id],
-    valueLabel: formatGlobalEffectValue(id, effects[id]),
-  }));
+  return (Object.keys(GLOBAL_EFFECT_LABELS) as GlobalEffectId[])
+    .filter((id) => isGlobalEffectApplicable(balance, id))
+    .map((id) => ({
+      id,
+      label: GLOBAL_EFFECT_LABELS[id],
+      value: effects[id],
+      valueLabel: formatGlobalEffectValue(id, effects[id]),
+    }));
 }
 
 function formatGlobalEffectValue(id: GlobalEffectId, value: number): string {
-  if (["GoblinLimit", "GoblinPurchaseLevel"].includes(id)) {
+  if (["GoblinLimitChange", "GoblinPurchaseLevelChange"].includes(id)) {
     return `+${numberFormat(value)}`;
   }
   if (id === "GoblinPurchasePrice") return `/${numberFormat(value)}`;
-  if (id === "GoblinCannonTimer") return `-${timeFormat(value, true)}`;
+  if (id === "GeneratorCurrencyMult") return `x${numberFormat(value)}`;
+  if (id === "GoblinCannonTimerChange") return `-${timeFormat(value, true)}`;
   if (id === "CrusherBombInterval") return timeFormat(value, true);
   if (["ProdTimePercentDecrease", "RockDoubleGemsPercentChance"].includes(id)) {
     return `${numberFormat(value * 100)}%`;
   }
   if (["RockCurrencyMult", "DeliveryCurrencyMult"].includes(id)) {
-    return `${numberFormat(value * 100)}%`;
+    return coefficientFormat(value, "x");
   }
-  return `x${numberFormat(value)}`;
+  return coefficientFormat(value, "x");
 }
 
 function derivedRow(
@@ -719,6 +878,64 @@ function rankUpTypeName(rankUpType: RankUpType | undefined): string {
     default:
       return "-";
   }
+}
+
+function cardUnlockLabel(
+  balance: Balance,
+  card: Card,
+  t?: LocalizationLookup,
+): string {
+  const rankUpType = balance.BalanceProperties[0]?.RankUpType;
+  if (rankUpType === RankUpType.Zone) {
+    return `Mine ${card.MineUnlock}`;
+  }
+
+  let globalRank = 0;
+  for (let zoneIndex = 0; zoneIndex < balance.Zones.length; zoneIndex += 1) {
+    const zone = balance.Zones[zoneIndex];
+    for (const unlock of zoneRankUnlocks(zone)) {
+      globalRank += 1;
+      if (card.MineUnlock === globalRank) {
+        const description =
+          unlock.kind === "checkpoint"
+            ? `Checkpoint ${unlock.checkpointNumber}`
+            : `${mineshaftName(unlock.mineshaftId, t)} mineshaft`;
+        return rankUpType === RankUpType.MineShaftAndCheckPointAndZone
+          ? `Mine ${zoneIndex + 1}: ${description}`
+          : description;
+      }
+    }
+    if (rankUpType === RankUpType.MineShaftAndCheckPoint) break;
+    globalRank += 1;
+    if (
+      card.MineUnlock === globalRank &&
+      zoneIndex + 1 < balance.Zones.length
+    ) {
+      return `Mine ${zoneIndex + 2}: Forge mineshaft`;
+    }
+  }
+  return String(card.MineUnlock);
+}
+
+function mineshaftName(id: string, t?: LocalizationLookup): string {
+  if (id === FORGE_ID) return "Forge";
+  return t?.(`mineshaft.name.${id}`, titleCase(id)) ?? titleCase(id);
+}
+
+function isGlobalEffectApplicable(
+  balance: Balance,
+  id: GlobalEffectId,
+): boolean {
+  if (id === "GoblinBaseDamage" && balance.Miners.length > 0) return true;
+  if (id === "DynamiteBaseDamage" && balance.Spells.length > 0) return true;
+
+  const types = new Set(GLOBAL_EFFECT_STAT_TYPES[id]);
+  return (
+    balance.Cards.some((card) => types.has(card.StatModifierType)) ||
+    balance.CheckPoint.some((checkpoint) =>
+      checkpoint.StatModifierType.some((type) => types.has(type)),
+    )
+  );
 }
 
 function formatModifierValue(value: number, statModifierType: number): string {
@@ -778,7 +995,7 @@ function formatModifierValue(value: number, statModifierType: number): string {
       StatModifierType.ReinforcementsCostDividerPerCheckPoint,
     ].includes(statModifierType)
   ) {
-    return `/${numberFormat(value)}`;
+    return `÷${numberFormat(value)}`;
   }
   return numberFormat(value);
 }

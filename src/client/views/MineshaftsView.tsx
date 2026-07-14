@@ -15,6 +15,7 @@ interface MineshaftsViewProps {
   objectiveElixirMultiplier: number;
   mineshafts: MineshaftProjection[];
   onCardLevelChange: (cardId: string, level: number) => void;
+  onGeneratorAutomatedChange: (generatorId: string, automated: boolean) => void;
   onGeneratorLevelChange: (generatorId: string, level: number) => void;
   onGeneratorOpenedChange: (generatorId: string, opened: boolean) => void;
   t: LocalizationLookup;
@@ -25,6 +26,7 @@ export function MineshaftsView({
   objectiveElixirMultiplier,
   mineshafts,
   onCardLevelChange,
+  onGeneratorAutomatedChange,
   onGeneratorLevelChange,
   onGeneratorOpenedChange,
   t,
@@ -32,9 +34,13 @@ export function MineshaftsView({
   const [selectedGeneratorId, setSelectedGeneratorId] = useState(
     mineshafts[0]?.id ?? "",
   );
+  const visibleMineshafts = mineshafts.filter(
+    (mineshaft) => mineshaft.existsInSelectedZone,
+  );
   const selected =
-    mineshafts.find((mineshaft) => mineshaft.id === selectedGeneratorId) ??
-    mineshafts[0];
+    visibleMineshafts.find(
+      (mineshaft) => mineshaft.id === selectedGeneratorId,
+    ) ?? visibleMineshafts[0];
 
   return (
     <div className="p-3">
@@ -44,21 +50,25 @@ export function MineshaftsView({
             <tr>
               <th>Mineshaft</th>
               <th>Open</th>
+              <th>Automated</th>
               <th>Level</th>
               <th>Managers</th>
               <th>Income / Cycle</th>
               <th>Cycle Time</th>
+              <th>Idle Income %</th>
+              <th>Active Income %</th>
               <th>Upgrade Cost</th>
               <th>Idle Time to Upgrade</th>
               <th>Active Time to Upgrade</th>
             </tr>
           </thead>
           <tbody>
-            {mineshafts.map((mineshaft) => (
+            {visibleMineshafts.map((mineshaft) => (
               <MineshaftRow
                 key={mineshaft.id}
                 mineshaft={mineshaft}
                 onCardLevelChange={onCardLevelChange}
+                onGeneratorAutomatedChange={onGeneratorAutomatedChange}
                 onGeneratorLevelChange={onGeneratorLevelChange}
                 onGeneratorOpenedChange={onGeneratorOpenedChange}
                 t={t}
@@ -80,7 +90,7 @@ export function MineshaftsView({
               value={selected?.id ?? ""}
               onChange={(event) => setSelectedGeneratorId(event.target.value)}
             >
-              {mineshafts.map((mineshaft) => (
+              {visibleMineshafts.map((mineshaft) => (
                 <option key={mineshaft.id} value={mineshaft.id}>
                   {displayName(mineshaft.id, t)}
                 </option>
@@ -103,27 +113,38 @@ export function MineshaftsView({
 function MineshaftRow({
   mineshaft,
   onCardLevelChange,
+  onGeneratorAutomatedChange,
   onGeneratorLevelChange,
   onGeneratorOpenedChange,
   t,
 }: {
   mineshaft: MineshaftProjection;
   onCardLevelChange: (cardId: string, level: number) => void;
+  onGeneratorAutomatedChange: (generatorId: string, automated: boolean) => void;
   onGeneratorLevelChange: (generatorId: string, level: number) => void;
   onGeneratorOpenedChange: (generatorId: string, opened: boolean) => void;
   t: LocalizationLookup;
 }) {
-  const disabled = !mineshaft.existsInSelectedZone;
   return (
-    <tr className={disabled ? "gng-mineshaft-row-unavailable" : ""}>
+    <tr>
       <td>{displayName(mineshaft.id, t)}</td>
       <td>
         <input
           checked={mineshaft.opened}
-          disabled={mineshaft.id === "spawningcart" || disabled}
+          disabled={mineshaft.requiredOpen}
           type="checkbox"
           onChange={(event) =>
             onGeneratorOpenedChange(mineshaft.id, event.target.checked)
+          }
+        />
+      </td>
+      <td>
+        <input
+          checked={mineshaft.automated}
+          disabled={!mineshaft.automationCardId}
+          type="checkbox"
+          onChange={(event) =>
+            onGeneratorAutomatedChange(mineshaft.id, event.target.checked)
           }
         />
       </td>
@@ -131,14 +152,13 @@ function MineshaftRow({
         <div className="gng-level-cell">
           <input
             className="form-control form-control-sm"
-            disabled={disabled}
-            min={1}
+            min={0}
             type="number"
             value={mineshaft.level}
             onChange={(event) =>
               onGeneratorLevelChange(
                 mineshaft.id,
-                Math.max(1, Number(event.target.value)),
+                Math.max(0, Number(event.target.value)),
               )
             }
           />
@@ -175,22 +195,34 @@ function MineshaftRow({
           </div>
         ))}
       </td>
-      <td>{numberFormat(mineshaft.incomePerCycle)}</td>
-      <td>{timeFormat(mineshaft.cycleSeconds)}</td>
+      <td>{mineshaft.opened ? numberFormat(mineshaft.incomePerCycle) : ""}</td>
+      <td>{mineshaft.opened ? timeFormat(mineshaft.cycleSeconds) : ""}</td>
       <td>
-        {mineshaft.nextObjectiveCost === null
-          ? "-"
-          : numberFormat(mineshaft.nextObjectiveCost)}
+        {mineshaft.opened ? `${mineshaft.idleIncomePercent.toFixed(2)}%` : ""}
       </td>
       <td>
-        {mineshaft.idleTimeToUpgrade === null
-          ? "-"
-          : timeFormat(mineshaft.idleTimeToUpgrade)}
+        {mineshaft.opened ? `${mineshaft.activeIncomePercent.toFixed(2)}%` : ""}
       </td>
       <td>
-        {mineshaft.activeTimeToUpgrade === null
-          ? "-"
-          : timeFormat(mineshaft.activeTimeToUpgrade)}
+        {!mineshaft.opened
+          ? ""
+          : mineshaft.nextObjectiveCost === null
+            ? "-"
+            : numberFormat(mineshaft.nextObjectiveCost)}
+      </td>
+      <td>
+        {!mineshaft.opened
+          ? ""
+          : mineshaft.idleTimeToUpgrade === null
+            ? "-"
+            : timeFormat(mineshaft.idleTimeToUpgrade)}
+      </td>
+      <td>
+        {!mineshaft.opened
+          ? ""
+          : mineshaft.activeTimeToUpgrade === null
+            ? "-"
+            : timeFormat(mineshaft.activeTimeToUpgrade)}
       </td>
     </tr>
   );
@@ -236,7 +268,7 @@ function UpgradeTable({
 
   return (
     <div className="table-responsive">
-      <table className="table table-sm">
+      <table className="table table-striped table-sm">
         <thead>
           <tr>
             <th>Objective</th>
@@ -249,7 +281,7 @@ function UpgradeTable({
           {rows.map((row) => (
             <tr key={row.objective}>
               <td>{row.objective}</td>
-              <td>x{row.multiplier}</td>
+              <td>x{row.multiplier.toLocaleString()}</td>
               <td>{numberFormat(row.cost)}</td>
               <td>{row.elixir === null ? "-" : numberFormat(row.elixir)}</td>
             </tr>
@@ -264,7 +296,7 @@ function displayName(id: string, t: LocalizationLookup): string {
   if (id === "spawningcart") {
     return "Forge";
   }
-  return t(`generator.${id}.name`, titleCase(id));
+  return t(`mineshaft.name.${id}`, titleCase(id));
 }
 
 function rarityName(rarity: number): string {

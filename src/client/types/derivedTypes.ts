@@ -16,6 +16,7 @@ export type MineshaftProjection = {
   managers: ManagerProjection[];
   existsInSelectedZone: boolean;
   opened: boolean;
+  requiredOpen: boolean;
   automated: boolean;
   automationCardId?: string;
   automationLevel?: number;
@@ -23,6 +24,8 @@ export type MineshaftProjection = {
   cycleSeconds: number;
   incomePerSecond: number;
   activeIncomePerSecond: number;
+  idleIncomePercent: number;
+  activeIncomePercent: number;
   nextObjectiveCost: number | null;
   activeTimeToUpgrade: number | null;
   idleTimeToUpgrade: number | null;
@@ -44,14 +47,21 @@ export type CardProjection = {
   effectLabel: string;
   elixirAllocated: number;
   elixirRemaining: number;
+  unlockLabel: string;
+  displayLevel: number;
+  displayMaxLevel: number;
 };
 
 export type SummaryProjection = {
+  balanceId: string;
+  zoneNumber: number;
   zoneId: string;
   checkpointsOpened: number;
-  currentGoblinLevel: number;
+  goblinPurchaseLevel: number;
+  goblinCannonLevel: number;
   idleIncomePerSecond: number;
   activeIncomePerSecond: number;
+  deliveriesPerHour: number;
   rankUpType: string;
   rankMultiplierIndex: number;
   globalRank: number;
@@ -61,11 +71,11 @@ export type SummaryProjection = {
 };
 
 export type GlobalEffectId =
-  | "GoblinLimit"
+  | "GoblinLimitChange"
   | "GoblinPurchasePrice"
-  | "GoblinPurchaseLevel"
+  | "GoblinPurchaseLevelChange"
   | "GoblinBaseDamage"
-  | "GoblinCannonTimer"
+  | "GoblinCannonTimerChange"
   | "GeneratorCurrencyMult"
   | "RockCurrencyMult"
   | "DeliveryCurrencyMult"
@@ -155,6 +165,8 @@ export type MapCellKind =
   | "unknown";
 
 export type GoblinCostProjection = {
+  goblinPurchaseLevel: number;
+  minimumGoblinPurchaseLevel: number;
   labels: number[];
   rows: GoblinCostRow[];
   maxGoblinCount: number;
@@ -181,7 +193,10 @@ export type DeliveryRowProjection = {
   rewardName: string;
   valueLabel: string;
   numericValue: number | null;
-  weight: number;
+  rawWeight: number;
+  oddsWeight: number;
+  nextDeliveryPercent: number;
+  unlocked: boolean;
   count: number;
   total: number;
 };
@@ -208,4 +223,5 @@ export type AppViewId =
   | "goblins"
   | "deliveries"
   | "gacha"
+  | "rocks"
   | "save";

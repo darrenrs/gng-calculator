@@ -183,7 +183,7 @@ export function maxGoblinCount(
   activeState: ActiveState,
 ): number {
   const base = balance.BalanceProperties[0]?.BaseUnitCap ?? 0;
-  return base + buildNamedGlobalEffects(balance, activeState).GoblinLimit;
+  return base + buildNamedGlobalEffects(balance, activeState).GoblinLimitChange;
 }
 
 export function buildNamedGlobalEffects(
@@ -229,7 +229,7 @@ export function calculateNamedGlobalEffects(
     product(StatModifierType.MinerCritPowerMult);
 
   return {
-    GoblinLimit: additive(StatModifierType.MinerUnitCapAddition),
+    GoblinLimitChange: additive(StatModifierType.MinerUnitCapAddition),
     GoblinPurchasePrice:
       product(StatModifierType.ReinforcementsCostDivider) *
       values(StatModifierType.ReinforcementsCostDividerPerCheckPoint).reduce(
@@ -240,11 +240,13 @@ export function calculateNamedGlobalEffects(
           checkpointCount,
         ),
       ),
-    GoblinPurchaseLevel: additive(StatModifierType.ReinforcementsLevelAddition),
+    GoblinPurchaseLevelChange: additive(
+      StatModifierType.ReinforcementsLevelAddition,
+    ),
     GoblinBaseDamage:
       (critPower * critChance + (1 - critChance)) *
       (1 + additive(StatModifierType.AncestralPowerMult)),
-    GoblinCannonTimer:
+    GoblinCannonTimerChange:
       additive(StatModifierType.MinerSpawnTimeReduction) +
       values(StatModifierType.MinerSpawnTimeReductionPerCheckPoint).reduce(
         (total, value) => total + value * checkpointCount,

@@ -10,8 +10,8 @@ import type {
   MapSizedObject,
   Zone,
 } from "../types/sourceBalanceTypes";
-import { generatorIncome, maxGoblinCount } from "./balanceCalculations";
-import { numberFormat, titleCase } from "./format";
+import { maxGoblinCount } from "./balanceCalculations";
+import { titleCase } from "./format";
 
 const MAP_COLUMNS = 7;
 const STATIC_MAP_SIZES: Record<string, { rowSpan: number; colSpan: number }> = {
@@ -81,6 +81,53 @@ export function zoneCheckpointCount(zone?: Zone): number {
   return (zone?.Grid.split(",") ?? []).filter(
     (token) => mapTokenParts(token)[0] === "p",
   ).length;
+}
+
+export type ZoneRankUnlock =
+  | { kind: "mineshaft"; mineshaftId: string }
+  | { kind: "checkpoint"; checkpointNumber: number };
+
+export function zoneRankUnlocks(zone?: Zone): ZoneRankUnlock[] {
+  const tokens = zone?.Grid.split(",") ?? [];
+  const rows: string[][] = [];
+  for (let index = 0; index < tokens.length; index += MAP_COLUMNS) {
+    rows.push(tokens.slice(index, index + MAP_COLUMNS));
+  }
+
+  let checkpointNumber = 0;
+  return rows
+    .reverse()
+    .flat()
+    .flatMap((token): ZoneRankUnlock[] => {
+      const [prefix, id] = mapTokenParts(token);
+      if (prefix === "c") {
+        return [{ kind: "mineshaft", mineshaftId: FORGE_ID }];
+      }
+      if (prefix === "s") {
+        return [{ kind: "mineshaft", mineshaftId: id }];
+      }
+      if (prefix === "p") {
+        checkpointNumber += 1;
+        return [{ kind: "checkpoint", checkpointNumber }];
+      }
+      return [];
+    });
+}
+
+export function zoneMineshaftIdsUnlockedByCheckpoints(
+  zone: Zone | undefined,
+  checkpointsOpened: number,
+): string[] {
+  let checkpointsPassed = 0;
+  const ids: string[] = [];
+  for (const unlock of zoneRankUnlocks(zone)) {
+    if (unlock.kind === "checkpoint") {
+      checkpointsPassed += 1;
+    } else if (checkpointsPassed <= checkpointsOpened) {
+      ids.push(unlock.mineshaftId);
+    }
+  }
+  return ids;
 }
 
 export function mapTokenParts(token: string): string[] {
@@ -186,46 +233,18 @@ function parseMapDisplayCell(
   if (prefix === "s") {
     const id = parts[1];
     const source = balance.MineShafts.find((item) => item.Id === id);
-    const cardId = parts[4];
-    const automationLevel = Number(parts[5] ?? 0);
-    const automated =
-      (activeState.cardsInput[cardId]?.level ?? 0) >= automationLevel ||
-      !cardId;
-    const income = source
-      ? generatorIncome(
-          balance,
-          id,
-          source,
-          activeState.generatorsInput[id]?.level ?? 1,
-          cardLevelsFromState(activeState),
-          activeState.mapInput.checkpointsOpened,
-        )
-      : null;
     return placedCell(
       base,
       "mineshaft",
-      t?.(`generator.${id}.name`, titleCase(id)) ?? titleCase(id),
+      t?.(`mineshaft.name.${id}`, titleCase(id)) ?? titleCase(id),
       index,
       zone,
       source,
-      `Automated: ${automated ? "Yes" : "No"}\nIncome per Cycle: ${
-        income ? numberFormat(income.incomePerCycle) : "-"
-      }`,
+      parts[2] ?? "",
     );
   }
 
   if (prefix === "c") {
-    const source = balance.SpawningCart[0];
-    const income = source
-      ? generatorIncome(
-          balance,
-          FORGE_ID,
-          source,
-          activeState.generatorsInput[FORGE_ID]?.level ?? 1,
-          cardLevelsFromState(activeState),
-          activeState.mapInput.checkpointsOpened,
-        )
-      : null;
     return placedStaticCell(
       base,
       "spawningCart",
@@ -233,7 +252,7 @@ function parseMapDisplayCell(
       index,
       zone,
       STATIC_MAP_SIZES[FORGE_ID],
-      `Income per Cycle: ${income ? numberFormat(income.incomePerCycle) : "-"}`,
+      undefined,
     );
   }
 
@@ -241,11 +260,11 @@ function parseMapDisplayCell(
     return placedStaticCell(
       base,
       "checkpoint",
-      `Checkpoint: ${parts[2] ?? ""}`,
+      parts[2] ?? "",
       index,
       zone,
       STATIC_MAP_SIZES.checkpoint,
-      parts[3],
+      undefined,
     );
   }
 
@@ -253,11 +272,11 @@ function parseMapDisplayCell(
     return placedStaticCell(
       base,
       "exit",
-      `Exit: ${parts[2] ?? ""}`,
+      parts[2] ?? "",
       index,
       zone,
       STATIC_MAP_SIZES.exit,
-      parts[3],
+      undefined,
     );
   }
 
@@ -363,13 +382,4 @@ function placementFromSize(
   size: { rowSpan: number; colSpan: number },
 ) {
   return balanceIndexToCssGrid(index, columns, size.colSpan, size.rowSpan);
-}
-
-function cardLevelsFromState(activeState: ActiveState): Record<string, number> {
-  return Object.fromEntries(
-    Object.entries(activeState.cardsInput).map(([cardId, input]) => [
-      cardId,
-      input.level,
-    ]),
-  );
 }

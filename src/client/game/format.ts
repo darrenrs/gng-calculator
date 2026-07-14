@@ -27,6 +27,14 @@ export function numberFormat(n: number): string {
   return `${significantFigures} ${suffix}`;
 }
 
+export function coefficientFormat(value: number, operator: "x" | "÷"): string {
+  return `${operator}${value.toFixed(2)}`;
+}
+
+export function percentageFormat(value: number, decimals = 2): string {
+  return `${value.toFixed(decimals)}%`;
+}
+
 // Global time formatting function
 export function timeFormat(s: number, zeroMeansBase: boolean = false): string {
   if (typeof s !== "number") {

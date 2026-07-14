@@ -92,7 +92,7 @@ export type Rock = MapSizedObject & {
 };
 
 export type RewardModel = {
-  RewardType: RewardType; // possibly turn this into a proper enum
+  RewardType: RewardType;
   DetailedType: string;
   Quantity: number;
 };
@@ -309,20 +309,6 @@ export enum DeliveryType {
   Dynamite = 4,
 }
 
-export type LteSchedule = {
-  LteDatas?: LteScheduleEntry[];
-  LteData?: LteScheduleEntry[];
-};
-
-export type LteScheduleEntry = {
-  Id: string;
-  GameDataId: string;
-  ExclusiveZoneNumber: number;
-  StartDateTimeUtc: string;
-  EndDateTimeUtc: string;
-  TotalDuration?: string;
-};
-
 export type FreeGachaCycle = {
   MaxFreeGachas: string;
   Hours: number;
@@ -343,4 +329,17 @@ export type Spell = {
   CritPowerMultiplier: number;
   CritPowerGrowth: number;
   CritPowerFormulaType: FormulaType;
+};
+
+export type LteSchedule = {
+  LteDatas: LteScheduleEntry[];
+};
+
+export type LteScheduleEntry = {
+  Id: string;
+  GameDataId: string;
+  ExclusiveZoneNumber: number;
+  StartDateTimeUtc: string;
+  EndDateTimeUtc: string;
+  TotalDuration?: string;
 };

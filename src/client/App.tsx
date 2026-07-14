@@ -11,6 +11,7 @@ import {
 } from "./types/activeStateTypes";
 import type { AppViewId } from "./types/derivedTypes";
 import { lookupLocalization, parseLocalization } from "./game/localization";
+import { zoneMineshaftIdsUnlockedByCheckpoints } from "./game/map";
 import {
   buildCardProjections,
   buildDeliveryProjection,
@@ -21,6 +22,8 @@ import {
   buildSummaryProjection,
   getSelectedRankMultiplier,
 } from "./game/projections";
+import { buildNamedGlobalEffects } from "./game/balanceCalculations";
+import { RankUpType } from "./types/sourceBalanceTypes";
 import type { Balance, LteScheduleEntry } from "./types/sourceBalanceTypes";
 import { CardsView } from "./views/CardsView";
 import { DeliveriesView } from "./views/DeliveriesView";
@@ -40,6 +43,7 @@ const views: Array<{ id: AppViewId; label: string }> = [
   { id: "goblins", label: "Goblins" },
   { id: "deliveries", label: "Deliveries" },
   { id: "gacha", label: "Gacha" },
+  { id: "rocks", label: "Rocks" },
   { id: "save", label: "Save" },
 ];
 
@@ -69,6 +73,9 @@ export function App() {
     `theme.${selectedBalanceId}.name`,
     titleCase(selectedBalanceId),
   );
+  const selectedScheduleEntry = schedule.find(
+    (entry) => entry.Id === selectedScheduleEntryId,
+  );
 
   useEffect(() => {
     Promise.allSettled([
@@ -80,9 +87,7 @@ export function App() {
         setBalanceIds(balanceIdsResult.value);
       }
       if (scheduleResult.status === "fulfilled") {
-        setSchedule(
-          scheduleResult.value.LteDatas ?? scheduleResult.value.LteData ?? [],
-        );
+        setSchedule(scheduleResult.value.LteDatas);
       }
       if (localizationResult.status === "fulfilled") {
         setLocalizationText(localizationResult.value);
@@ -125,8 +130,10 @@ export function App() {
   );
   const cardProjections = useMemo(
     () =>
-      balance && activeState ? buildCardProjections(balance, activeState) : [],
-    [balance, activeState],
+      balance && activeState
+        ? buildCardProjections(balance, activeState, t)
+        : [],
+    [balance, activeState, localization],
   );
   const mineshaftProjections = useMemo(
     () =>
@@ -180,16 +187,34 @@ export function App() {
   }
 
   function setCardLevel(cardId: string, level: number) {
-    updateActiveState((state) => ({
-      ...state,
-      cardsInput: {
-        ...state.cardsInput,
-        [cardId]: {
-          quantity: state.cardsInput[cardId]?.quantity ?? 0,
-          level,
+    updateActiveState((state) => {
+      const nextState = {
+        ...state,
+        cardsInput: {
+          ...state.cardsInput,
+          [cardId]: {
+            quantity: state.cardsInput[cardId]?.quantity ?? 0,
+            level,
+          },
         },
-      },
-    }));
+      };
+      if (!balance) return nextState;
+      const minimumGoblinPurchaseLevel = Math.max(
+        1,
+        buildNamedGlobalEffects(balance, nextState).GoblinPurchaseLevelChange +
+          1,
+      );
+      return {
+        ...nextState,
+        goblinsInput: {
+          ...nextState.goblinsInput,
+          goblinPurchaseLevel: Math.max(
+            minimumGoblinPurchaseLevel,
+            nextState.goblinsInput.goblinPurchaseLevel,
+          ),
+        },
+      };
+    });
   }
 
   function setCardQuantity(cardId: string, quantity: number) {
@@ -206,17 +231,53 @@ export function App() {
   }
 
   function setGeneratorLevel(generatorId: string, level: number) {
-    updateActiveState((state) => ({
-      ...state,
-      generatorsInput: {
-        ...state.generatorsInput,
-        [generatorId]: { level },
-      },
-    }));
+    updateActiveState((state) => {
+      const normalizedLevel = Number.isFinite(level)
+        ? Math.max(0, Math.floor(level))
+        : 0;
+      const ids = new Set(state.mapInput.mineshaftIdsOpened);
+      if (generatorId === "spawningcart" || normalizedLevel > 0) {
+        ids.add(generatorId);
+      } else {
+        ids.delete(generatorId);
+      }
+      ids.add("spawningcart");
+      return {
+        ...state,
+        generatorsInput: {
+          ...state.generatorsInput,
+          [generatorId]: {
+            level:
+              generatorId === "spawningcart"
+                ? Math.max(1, normalizedLevel)
+                : normalizedLevel,
+          },
+        },
+        mapInput: {
+          ...state.mapInput,
+          mineshaftIdsOpened: Array.from(ids),
+        },
+      };
+    });
   }
 
   function setGeneratorOpened(generatorId: string, opened: boolean) {
     updateActiveState((state) => {
+      const zone = balance?.Zones.find(
+        (candidate) => candidate.Id === state.selectedZoneId,
+      );
+      const requiredOpenIds = new Set(
+        zoneMineshaftIdsUnlockedByCheckpoints(
+          zone,
+          state.mapInput.checkpointsOpened - 1,
+        ),
+      );
+      if (
+        !opened &&
+        (generatorId === "spawningcart" || requiredOpenIds.has(generatorId))
+      ) {
+        return state;
+      }
       const ids = new Set(state.mapInput.mineshaftIdsOpened);
       if (opened) {
         ids.add(generatorId);
@@ -226,6 +287,14 @@ export function App() {
       ids.add("spawningcart");
       return {
         ...state,
+        generatorsInput: {
+          ...state.generatorsInput,
+          [generatorId]: {
+            level: opened
+              ? Math.max(1, state.generatorsInput[generatorId]?.level ?? 1)
+              : 0,
+          },
+        },
         mapInput: {
           ...state.mapInput,
           mineshaftIdsOpened: Array.from(ids),
@@ -235,17 +304,87 @@ export function App() {
   }
 
   function setCheckpointCount(count: number) {
-    updateActiveState((state) => ({
-      ...state,
-      mapInput: { ...state.mapInput, checkpointsOpened: count },
-    }));
+    updateActiveState((state) => {
+      const zone = balance?.Zones.find(
+        (candidate) => candidate.Id === state.selectedZoneId,
+      );
+      const openedIds = new Set(
+        zoneMineshaftIdsUnlockedByCheckpoints(zone, count),
+      );
+      openedIds.add("spawningcart");
+      const generatorsInput = { ...state.generatorsInput };
+      for (const generator of [
+        ...(balance?.MineShafts ?? []),
+        ...(balance?.SpawningCart ?? []),
+      ]) {
+        const id = generator.Id;
+        const wasOpened = state.mapInput.mineshaftIdsOpened.includes(id);
+        generatorsInput[id] = {
+          level: openedIds.has(id)
+            ? wasOpened
+              ? Math.max(1, state.generatorsInput[id]?.level ?? 1)
+              : 1
+            : 0,
+        };
+      }
+      generatorsInput.spawningcart = {
+        level: Math.max(1, generatorsInput.spawningcart?.level ?? 1),
+      };
+      const nextState = {
+        ...state,
+        generatorsInput,
+        mapInput: {
+          ...state.mapInput,
+          checkpointsOpened: count,
+          mineshaftIdsOpened: Array.from(openedIds),
+        },
+      };
+      if (!balance) return nextState;
+      return {
+        ...nextState,
+        goblinsInput: {
+          ...nextState.goblinsInput,
+          goblinPurchaseLevel: Math.max(
+            1,
+            buildNamedGlobalEffects(balance, nextState)
+              .GoblinPurchaseLevelChange + 1,
+            nextState.goblinsInput.goblinPurchaseLevel,
+          ),
+        },
+      };
+    });
   }
 
-  function setGoblinLevel(level: number) {
-    updateActiveState((state) => ({
-      ...state,
-      goblinsInput: { ...state.goblinsInput, currentGoblinLevel: level },
-    }));
+  function setGeneratorAutomated(generatorId: string, automated: boolean) {
+    const mineshaft = mineshaftProjections.find(
+      (candidate) => candidate.id === generatorId,
+    );
+    if (!mineshaft?.automationCardId) return;
+    const currentLevel =
+      activeState?.cardsInput[mineshaft.automationCardId]?.level ?? 0;
+    setCardLevel(
+      mineshaft.automationCardId,
+      automated ? Math.max(currentLevel, mineshaft.automationLevel ?? 0) : 0,
+    );
+  }
+
+  function setGoblinPurchaseLevel(level: number) {
+    updateActiveState((state) => {
+      const minimum = balance
+        ? Math.max(
+            1,
+            buildNamedGlobalEffects(balance, state).GoblinPurchaseLevelChange +
+              1,
+          )
+        : 1;
+      return {
+        ...state,
+        goblinsInput: {
+          ...state.goblinsInput,
+          goblinPurchaseLevel: Math.max(minimum, Math.floor(level)),
+        },
+      };
+    });
   }
 
   return (
@@ -261,7 +400,21 @@ export function App() {
             type="button"
             onClick={() => setBalancePanelOpen((isOpen) => !isOpen)}
           >
-            {balanceName}
+            <span className="d-flex flex-column">
+              <span>
+                {balanceName}
+                {balance &&
+                  balance.BalanceProperties[0]?.RankUpType ===
+                    RankUpType.MineShaftAndCheckPoint &&
+                  ` (${variantShort(selectedBalanceId, activeState?.selectedZoneId)})`}
+              </span>
+              {selectedScheduleEntry && (
+                <small>
+                  {formatDate(selectedScheduleEntry.StartDateTimeUtc)} -{" "}
+                  {formatDate(selectedScheduleEntry.EndDateTimeUtc)}
+                </small>
+              )}
+            </span>
           </button>
           <div className="flex-grow-1" />
           <button className="btn btn-primary" type="button">
@@ -299,21 +452,12 @@ export function App() {
               WARNING: This tool is not yet complete and may not return correct
               data. Always cross-check with the game first.
             </p>
-            <label className="form-label" htmlFor="globalZoneSelect">
-              Zone
-            </label>
-            <select
-              className="form-select gng-zone-select"
-              id="globalZoneSelect"
-              value={activeState.selectedZoneId}
-              onChange={(event) => setSelectedZoneId(event.target.value)}
-            >
-              {balance.Zones.map((zone) => (
-                <option key={zone.Id} value={zone.Id}>
-                  {zone.Id}
-                </option>
-              ))}
-            </select>
+            <ZoneSelector
+              balance={balance}
+              disabled={selectedScheduleEntryId !== null}
+              selectedZoneId={activeState.selectedZoneId}
+              onChange={setSelectedZoneId}
+            />
           </div>
         )}
 
@@ -344,10 +488,8 @@ export function App() {
           )}
         {mapProjection && activeState && activeView === "map" && (
           <MapView
-            currentGoblinLevel={activeState.goblinsInput.currentGoblinLevel}
             map={mapProjection}
             onCheckpointCountChange={setCheckpointCount}
-            onGoblinLevelChange={setGoblinLevel}
           />
         )}
         {balance && activeState && activeView === "mineshafts" && (
@@ -359,6 +501,7 @@ export function App() {
                 ?.GenObjectiveSoftCurrencyMultiplier ?? 1
             }
             onCardLevelChange={setCardLevel}
+            onGeneratorAutomatedChange={setGeneratorAutomated}
             onGeneratorLevelChange={setGeneratorLevel}
             onGeneratorOpenedChange={setGeneratorOpened}
             t={t}
@@ -372,7 +515,10 @@ export function App() {
           />
         )}
         {goblinProjection && activeView === "goblins" && (
-          <GoblinsView projection={goblinProjection} />
+          <GoblinsView
+            projection={goblinProjection}
+            onGoblinPurchaseLevelChange={setGoblinPurchaseLevel}
+          />
         )}
         {deliveryProjection && activeView === "deliveries" && (
           <DeliveriesView projection={deliveryProjection} />
@@ -389,6 +535,7 @@ export function App() {
             />
           )}
         {activeView === "save" && <SaveView />}
+        {activeView === "rocks" && <div className="p-3">TBD</div>}
       </main>
 
       <footer className="p-3">
@@ -427,9 +574,23 @@ function BalancePanel({
 
   return (
     <section className="gng-balance-panel border-bottom bg-body p-3">
+      <h2 className="h6">Main Mines</h2>
+      <div className="list-group mb-3 w-100">
+        <button
+          className={`list-group-item list-group-item-action ${
+            !selectedScheduleEntryId && selectedBalanceId === "evergreen"
+              ? "active"
+              : ""
+          }`}
+          type="button"
+          onClick={() => setDirectBalance("evergreen")}
+        >
+          {t("theme.evergreen.name", "Main Mines")}
+        </button>
+      </div>
       <div className="row g-3">
         <div className="col-lg-8">
-          <h2 className="h6">Schedule</h2>
+          <h2 className="h6">Event Schedule</h2>
           <div className="list-group">
             {activeSchedule.map((entry) => (
               <button
@@ -443,6 +604,7 @@ function BalancePanel({
                 <span className="d-flex justify-content-between gap-3">
                   <strong>
                     {t(`theme.${entry.GameDataId}.name`, entry.GameDataId)}
+                    {variantSuffix(entry.GameDataId, entry.ExclusiveZoneNumber)}
                   </strong>
                   <span className="gng-date-text">
                     {formatDate(entry.StartDateTimeUtc)} -{" "}
@@ -454,19 +616,8 @@ function BalancePanel({
           </div>
         </div>
         <div className="col-lg-4">
-          <h2 className="h6">All Balances</h2>
+          <h2 className="h6">All Events</h2>
           <div className="list-group">
-            <button
-              className={`list-group-item list-group-item-action gng-main-mine-entry ${
-                !selectedScheduleEntryId && selectedBalanceId === "evergreen"
-                  ? "active"
-                  : ""
-              }`}
-              type="button"
-              onClick={() => setDirectBalance("evergreen")}
-            >
-              {t("theme.evergreen.name", "Main Mines")}
-            </button>
             {sortedBalances.map((balanceId) => (
               <button
                 className={`list-group-item list-group-item-action ${
@@ -485,6 +636,100 @@ function BalancePanel({
         </div>
       </div>
     </section>
+  );
+}
+
+const VARIANT_BY_BALANCE: Record<string, ["L" | "R", "L" | "R"]> = {
+  arctic: ["L", "R"],
+  candy: ["L", "R"],
+  jungle: ["R", "L"],
+  minicard: ["L", "R"],
+  minielixir: ["L", "R"],
+  minigem: ["L", "R"],
+  pirate: ["L", "R"],
+  volcano: ["L", "R"],
+};
+
+function variantShort(balanceId: string, zoneId?: string): string {
+  const zoneNumber = Math.max(1, Number(zoneId?.replace(/^zone/, "") ?? 1));
+  return VARIANT_BY_BALANCE[balanceId]?.[zoneNumber - 1] ?? "L";
+}
+
+function variantSuffix(balanceId: string, zoneNumber: number): string {
+  const variant = VARIANT_BY_BALANCE[balanceId]?.[zoneNumber - 1];
+  return variant ? ` (${variant})` : "";
+}
+
+function ZoneSelector({
+  balance,
+  disabled,
+  selectedZoneId,
+  onChange,
+}: {
+  balance: Balance;
+  disabled: boolean;
+  selectedZoneId: string;
+  onChange: (zoneId: string) => void;
+}) {
+  const rankUpType = balance.BalanceProperties[0]?.RankUpType;
+  const zoneIndex = Math.max(
+    0,
+    balance.Zones.findIndex((zone) => zone.Id === selectedZoneId),
+  );
+
+  if (rankUpType === RankUpType.MineShaftAndCheckPoint) {
+    return (
+      <fieldset disabled={disabled}>
+        <legend className="form-label">Amethyst Left/Right Variant</legend>
+        {(["L", "R"] as const).map((variant) => {
+          const mappedIndex =
+            VARIANT_BY_BALANCE[balance.Id]?.indexOf(variant) ?? 0;
+          const targetZone = balance.Zones[Math.max(0, mappedIndex)];
+          return (
+            <label className="form-check form-check-inline" key={variant}>
+              <input
+                checked={variantShort(balance.Id, selectedZoneId) === variant}
+                className="form-check-input"
+                name="zoneVariant"
+                type="radio"
+                onChange={() => targetZone && onChange(targetZone.Id)}
+              />
+              <span className="form-check-label">
+                {variant === "L" ? "Left" : "Right"}
+              </span>
+            </label>
+          );
+        })}
+      </fieldset>
+    );
+  }
+
+  return (
+    <div>
+      <label className="form-label" htmlFor="globalZoneSelect">
+        Mine
+      </label>
+      <div className="gng-inline-number">
+        <input
+          id="globalZoneSelect"
+          max={balance.Zones.length}
+          min={1}
+          type="number"
+          value={zoneIndex + 1}
+          onChange={(event) => {
+            const nextIndex = Math.max(
+              0,
+              Math.min(
+                balance.Zones.length - 1,
+                Math.floor(Number(event.target.value)) - 1,
+              ),
+            );
+            onChange(balance.Zones[nextIndex]?.Id ?? selectedZoneId);
+          }}
+        />
+        <span className="text-secondary">/ {balance.Zones.length}</span>
+      </div>
+    </div>
   );
 }
 

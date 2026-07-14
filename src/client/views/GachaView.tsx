@@ -4,6 +4,7 @@ import type {
 } from "../types/derivedTypes";
 import { formatGachaCount } from "../game/projections";
 import { numberFormat } from "../game/format";
+import { maxCardLevel } from "../game/balanceCalculations";
 import type {
   Balance,
   Gacha,
@@ -39,7 +40,7 @@ export function GachaView({
 
   return (
     <>
-      <div className="container py-3" id="inputFields">
+      <div className="p-3" id="inputFields">
         <div className="row g-2 align-items-end">
           <div className="col-sm-4">
             <label
@@ -58,22 +59,28 @@ export function GachaView({
           {card16 && (
             <div className="col-sm-3">
               <label htmlFor="cardIncreaseRareLvl" className="form-label">
-                Cards+ Lvl
+                Cards+ Level
               </label>
-              <select
-                className="form-select"
+              <input
+                className="gng-number-input"
                 id="cardIncreaseRareLvl"
+                max={maxCardLevel(balance, card16)}
+                min={0}
+                type="number"
                 onChange={(event) =>
-                  onCardLevelChange(card16.Id, Number(event.target.value))
+                  onCardLevelChange(
+                    card16.Id,
+                    Math.max(
+                      0,
+                      Math.min(
+                        maxCardLevel(balance, card16),
+                        Math.floor(Number(event.target.value)),
+                      ),
+                    ),
+                  )
                 }
                 value={projection.gachaCardLevel}
-              >
-                {Array.from({ length: 10 }, (_value, index) => (
-                  <option key={index} value={index}>
-                    {index}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
           )}
         </div>
@@ -127,8 +134,14 @@ function GachaTable({
               <th>{t("card.rarity.legendary.singular", "Legendary")}</th>
             </>
           )}
+          {!isEvergreen && (
+            <>
+              <th>{t("card.rarity.common.singular", "Common")}</th>
+              <th>{t("card.rarity.rare.singular", "Rare")}</th>
+            </>
+          )}
           <th>Elixir</th>
-          <th>Crowns</th>
+          {!isEvergreen && <th>Crowns</th>}
         </tr>
       </thead>
       <tbody>
@@ -186,17 +199,43 @@ function GachaRow({
       <td>{t(`gacha.name.${gacha.Id}`, gacha.Id)}</td>
       {isEvergreen && (
         <>
-          <td className="text-nowrap">{formatGachaCount(totalCommon)}</td>
-          <td className="text-nowrap">{formatGachaCount(totalUncommon)}</td>
-          <td className="text-nowrap">{formatGachaCount(totalRare)}</td>
-          <td className="text-nowrap">{formatGachaCount(totalEventEpic)}</td>
-          <td className="text-nowrap">{formatGachaCount(totalLegendary)}</td>
+          <td>
+            <GachaCount value={totalCommon} />
+          </td>
+          <td>
+            <GachaCount value={totalUncommon} />
+          </td>
+          <td>
+            <GachaCount value={totalRare} />
+          </td>
+          <td>
+            <GachaCount value={totalEventEpic} />
+          </td>
+          <td>
+            <GachaCount value={totalLegendary} />
+          </td>
+        </>
+      )}
+      {!isEvergreen && (
+        <>
+          <td>
+            <GachaCount value={totalCommon} />
+          </td>
+          <td>
+            <GachaCount value={totalRare} />
+          </td>
         </>
       )}
       <td>
-        {numberFormat(softCurrencyMin)}-{numberFormat(softCurrencyMax)}
+        {softCurrencyMin === 0 && softCurrencyMax === 0
+          ? ""
+          : `${numberFormat(softCurrencyMin)}-${numberFormat(softCurrencyMax)}`}
       </td>
-      <td>{numberFormat(leaderboardCurrency)}</td>
+      {!isEvergreen && (
+        <td>
+          {leaderboardCurrency === 0 ? "" : numberFormat(leaderboardCurrency)}
+        </td>
+      )}
     </tr>
   );
 }
@@ -231,7 +270,7 @@ function FixedGachaTable({
           <th>ID</th>
           <th>Cards</th>
           <th>Elixir</th>
-          <th>Crowns</th>
+          {!isEvergreen && <th>Crowns</th>}
         </tr>
       </thead>
       <tbody>
@@ -239,8 +278,7 @@ function FixedGachaTable({
           <tr>
             <td>GachaLegendary</td>
             <td>x1 Legendary Card</td>
-            <td>0</td>
-            <td>0</td>
+            <td />
           </tr>
         )}
         {gachaData.map((gacha) => (
@@ -250,15 +288,40 @@ function FixedGachaTable({
               {gacha.GuaranteedCardIds.map((cardId, index) => {
                 const count = gacha.GuaranteedCardCounts[index] ?? 0;
                 const rarity = rarityByCard.get(cardId);
-                return `x${count} ${t(`card.${cardId}.name`, cardId)} (${rarityName(rarity)})`;
-              }).join(", ")}
+                return (
+                  <span className="d-block" key={`${cardId}-${index}`}>
+                    x{count} {t(`card.${cardId}.name`, cardId)} (
+                    {rarityName(rarity)})
+                  </span>
+                );
+              })}
             </td>
-            <td>{gacha.SoftCurrencyMin}</td>
-            <td>{gacha.LeaderboardCurrency}</td>
+            <td>{gacha.SoftCurrencyMin === 0 ? "" : gacha.SoftCurrencyMin}</td>
+            {!isEvergreen && (
+              <td>
+                {gacha.LeaderboardCurrency === 0
+                  ? ""
+                  : gacha.LeaderboardCurrency}
+              </td>
+            )}
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+function GachaCount({ value }: { value: number }) {
+  if (value === 0) return null;
+  const lines = formatGachaCount(value).split("\n");
+  return (
+    <>
+      {lines.map((line) => (
+        <span className="d-block text-nowrap" key={line}>
+          {line}
+        </span>
+      ))}
+    </>
   );
 }
 

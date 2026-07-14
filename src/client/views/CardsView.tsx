@@ -1,6 +1,7 @@
 import type { CardProjection, LocalizationLookup } from "../types/derivedTypes";
 import { STAT_MODIFIER_LOCALIZATION_KEYS } from "../game/modifiers";
 import type { Rarity } from "../types/sourceBalanceTypes";
+import { StatModifierType } from "../types/sourceBalanceTypes";
 
 export function CardsView({
   cards,
@@ -17,6 +18,7 @@ export function CardsView({
         <thead>
           <tr>
             <th>Card Name</th>
+            <th>Unlocked At</th>
             <th>Rarity</th>
             <th>Level</th>
             <th>Effect</th>
@@ -29,8 +31,9 @@ export function CardsView({
           {cards.map(
             ({
               card,
-              level,
-              maxLevel,
+              unlockLabel,
+              displayLevel,
+              displayMaxLevel,
               effectLabel,
               elixirAllocated,
               elixirRemaining,
@@ -42,23 +45,30 @@ export function CardsView({
                     t(`card.${card.Id}.name`, card.Id),
                   )}
                 </td>
+                <td>{unlockLabel}</td>
                 <td>{t(rarityKey(card.Rarity), String(card.Rarity))}</td>
                 <td className="gng-level-cell-td">
                   <div className="gng-level-cell">
                     <input
                       className="form-control form-control-sm"
-                      max={maxLevel}
+                      max={displayMaxLevel}
                       min={0}
                       type="number"
-                      value={level}
+                      value={displayLevel}
                       onChange={(event) =>
                         onCardLevelChange(
                           card.Id,
-                          clampLevel(Number(event.target.value), maxLevel),
+                          displayToInternalLevel(
+                            card.StatModifierType,
+                            clampLevel(
+                              Number(event.target.value),
+                              displayMaxLevel,
+                            ),
+                          ),
                         )
                       }
                     />
-                    <span className="text-secondary">/ {maxLevel}</span>
+                    <span className="text-secondary">/ {displayMaxLevel}</span>
                   </div>
                 </td>
                 <td>{effectLabel}</td>
@@ -135,8 +145,12 @@ function fillManagerDescription(
   }
   return stripHtml(description).replace(
     "{0}",
-    t(`generator.${targetId}.name`, targetId),
+    t(`mineshaft.name.${targetId}`, targetId),
   );
+}
+
+function displayToInternalLevel(type: StatModifierType, level: number): number {
+  return type === StatModifierType.GoblinKing ? level + 1 : level;
 }
 
 function stripHtml(value: string): string {

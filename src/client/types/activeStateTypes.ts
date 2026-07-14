@@ -1,4 +1,5 @@
 import type { Balance } from "./sourceBalanceTypes";
+import { StatModifierType } from "./sourceBalanceTypes";
 
 export const FORGE_ID = "spawningcart";
 
@@ -19,8 +20,8 @@ export type MapInput = {
 };
 
 export type GoblinInput = {
-  currentGoblinLevel: number;
-  currentGoblinLevelProgress: number;
+  goblinPurchaseLevel: number;
+  goblinPurchaseLevelProgress: number;
 };
 
 export type CardInput = {
@@ -49,10 +50,14 @@ export function createDefaultActiveState(
       mineshaftIdsOpened: [FORGE_ID],
     },
     goblinsInput: {
-      currentGoblinLevel: 1,
-      currentGoblinLevelProgress: 0,
+      goblinPurchaseLevel: 1,
+      goblinPurchaseLevelProgress: 0,
     },
-    cardsInput: {},
+    cardsInput: Object.fromEntries(
+      balance.Cards.filter(
+        (card) => card.StatModifierType === StatModifierType.GoblinKing,
+      ).map((card) => [card.Id, { level: 1, quantity: 0 }]),
+    ),
     generatorsInput: {
       [FORGE_ID]: { level: 1 },
     },

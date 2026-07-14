@@ -14,7 +14,7 @@ export function parseLocalization(text: string): LocalizationMap {
       continue;
     }
 
-    const key = line.slice(0, separator).trim();
+    const key = line.slice(0, separator).trim().toLowerCase();
     const value = line.slice(separator + 1).trim();
     if (key) {
       values[key] = value;
@@ -30,11 +30,12 @@ export function lookupLocalization(
   key: string,
   fallback: string = key,
 ): string {
-  if (key === "theme.space1.name") {
-    return "Lunar Gold Rush (Left)";
+  const normalizedKey = key.toLowerCase();
+  if (normalizedKey === "theme.space1.name") {
+    return "Lunar Gold Rush (L)";
   }
-  if (key === "theme.space2.name") {
-    return "Lunar Gold Rush (Right)";
+  if (normalizedKey === "theme.space2.name") {
+    return "Lunar Gold Rush (R)";
   }
-  return values[key] ?? fallback;
+  return values[normalizedKey] ?? fallback;
 }

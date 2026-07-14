@@ -164,6 +164,10 @@ table.table {
   font-size: 12px;
 }
 
+.gng-delivery-locked > * {
+  color: var(--bs-tertiary-color) !important;
+}
+
 .gng-level-cell {
   align-items: center;
   display: flex;
@@ -181,16 +185,6 @@ table.table {
   max-width: 6rem;
 }
 
-.gng-mineshaft-row-unavailable > * {
-  color: #6c757d;
-}
-
-.gng-mineshaft-row-unavailable input,
-.gng-mineshaft-row-unavailable select,
-.gng-mineshaft-row-unavailable button {
-  color: #6c757d;
-}
-
 .gng-number-input,
 .gng-level-cell input[type="number"],
 .gng-manager-input input[type="number"],
@@ -203,6 +197,7 @@ table.table {
   box-shadow: none;
   padding-left: 0.125rem;
   padding-right: 0.125rem;
+  text-align: right;
 }
 
 .gng-number-input::-webkit-outer-spin-button,

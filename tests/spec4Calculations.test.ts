@@ -6,15 +6,23 @@ import {
   calculateGeneratorObjectiveElixir,
   generatorUpgradeCostRange,
 } from "../src/client/game/balanceCalculations";
-import { numberFormat } from "../src/client/game/format";
+import { numberFormat, percentageFormat } from "../src/client/game/format";
 import {
+  buildCardProjections,
   buildDeliveryProjection,
   buildDerivedRankState,
   buildGachaProjection,
+  buildMineshaftProjections,
   buildSummaryProjection,
+  deliveriesPerHour,
+  getGoblinCannonLevel,
   getSelectedRankMultiplier,
 } from "../src/client/game/projections";
-import { zoneCheckpointCount, zoneMineshaftIds } from "../src/client/game/map";
+import {
+  zoneCheckpointCount,
+  zoneMineshaftIds,
+  zoneMineshaftIdsUnlockedByCheckpoints,
+} from "../src/client/game/map";
 import {
   createDefaultActiveState,
   FORGE_ID,
@@ -90,9 +98,9 @@ test("checkpoint and per-checkpoint effects stack by their operators", () => {
   evergreenState.cardsInput.ca037 = { level: 1, quantity: 0 };
 
   const evergreenEffects = buildNamedGlobalEffects(evergreen, evergreenState);
-  assert.equal(evergreenEffects.GoblinLimit, 2);
+  assert.equal(evergreenEffects.GoblinLimitChange, 2);
   assert.equal(evergreenEffects.GoblinPurchasePrice, 2500);
-  assert.equal(evergreenEffects.GoblinCannonTimer, 240);
+  assert.equal(evergreenEffects.GoblinCannonTimerChange, 240);
   assert.equal(evergreenEffects.GeneratorCurrencyMult, 16);
 
   const arctic = loadBalance("arctic");
@@ -101,7 +109,7 @@ test("checkpoint and per-checkpoint effects stack by their operators", () => {
   const arcticEffects = buildNamedGlobalEffects(arctic, arcticState);
   assert.equal(arcticEffects.GoblinPurchasePrice, 1_000_000);
   assert.equal(arcticEffects.GeneratorCurrencyMult, 4096);
-  assert.equal(arcticEffects.GoblinCannonTimer, 1200);
+  assert.equal(arcticEffects.GoblinCannonTimerChange, 1200);
   assert.equal(arcticEffects.DeliveryCurrencyMult, 5);
 });
 
@@ -227,6 +235,219 @@ test("active delivery farming chooses the highest eligible weight", () => {
     buildDeliveryProjection(balance, state, 10).activeIncomePerSecond,
     10,
   );
+});
+
+test("delivery unlocks control probability and active eligibility", () => {
+  const first = coreDelivery(1, 10, -1, 1);
+  const second = coreDelivery(2, 30, -1, 100);
+  second.RankUnlock = 2;
+  const balance = deliveryBalance([first, second]);
+  const state = createDefaultActiveState(balance);
+
+  let projection = buildDeliveryProjection(balance, state, 1);
+  assert.deepEqual(
+    projection.rows.map((row) => [row.unlocked, row.nextDeliveryPercent]),
+    [
+      [true, 100],
+      [false, 0],
+    ],
+  );
+  assert.equal(projection.activeIncomePerSecond, 1);
+
+  state.mapInput.mineshaftIdsOpened.push(zoneMineshaftIds(balance.Zones[0])[0]);
+  projection = buildDeliveryProjection(balance, state, 1);
+  assert.deepEqual(
+    projection.rows.map((row) => [row.unlocked, row.nextDeliveryPercent]),
+    [
+      [true, 25],
+      [true, 75],
+    ],
+  );
+  assert.equal(projection.activeIncomePerSecond, 100);
+});
+
+test("dynamite odds use the rounded coefficient without changing raw weight", () => {
+  const dynamite = delivery(1, 15, -1, "Dynamite", 1);
+  const core = coreDelivery(2, 10, -1, 1);
+  const balance = deliveryBalance([dynamite, core]);
+  balance.Cards = [
+    {
+      Id: "dynamite-odds",
+      Rarity: 1,
+      MineUnlock: 1,
+      SortingWeight: 1,
+      StatModifierType: 20,
+      ModifierBase: 0,
+      ModifierMultiplier: 0.1,
+      ModifierGrowth: 0,
+      ModifierPower: 0,
+      ModifierRound: 0,
+      ModifierFormulaType: FormulaType.Quadratic,
+      TargetIds: [],
+      IsManager: false,
+    },
+  ];
+  const state = createDefaultActiveState(balance);
+  state.cardsInput["dynamite-odds"] = { level: 1, quantity: 0 };
+
+  const rows = buildDeliveryProjection(balance, state, 1).rows;
+  assert.deepEqual(
+    rows.map((row) => row.rawWeight),
+    [15, 10],
+  );
+  assert.deepEqual(
+    rows.map((row) => row.oddsWeight),
+    [17, 10],
+  );
+  assert.equal(
+    Math.round(rows.reduce((total, row) => total + row.nextDeliveryPercent, 0)),
+    100,
+  );
+});
+
+test("checkpoint progress identifies exactly the unlocked mineshafts", () => {
+  const zone = loadBalance("arctic").Zones[0];
+  assert.deepEqual(zoneMineshaftIdsUnlockedByCheckpoints(zone, 0), [
+    FORGE_ID,
+    "amethyst",
+    "citrine",
+    "agate",
+  ]);
+  assert.deepEqual(zoneMineshaftIdsUnlockedByCheckpoints(zone, 1), [
+    FORGE_ID,
+    "amethyst",
+    "citrine",
+    "agate",
+    "topaz",
+    "opal",
+    "jade",
+  ]);
+});
+
+test("opened checkpoints make completed mineshaft segments required", () => {
+  const balance = loadBalance("arctic");
+  const state = createDefaultActiveState(balance);
+  state.mapInput.checkpointsOpened = 1;
+  state.mapInput.mineshaftIdsOpened = zoneMineshaftIdsUnlockedByCheckpoints(
+    balance.Zones[0],
+    1,
+  );
+
+  const rows = buildMineshaftProjections(balance, state);
+  assert.equal(rows.find((row) => row.id === "amethyst")?.requiredOpen, true);
+  assert.equal(rows.find((row) => row.id === "agate")?.requiredOpen, true);
+  assert.equal(rows.find((row) => row.id === "topaz")?.requiredOpen, false);
+});
+
+test("Goblin deliveries use purchase level while cannon level clamps to one", () => {
+  const goblin = delivery(1, 10, -1, "tinygoblin", 2);
+  const balance = deliveryBalance([goblin]);
+  const state = createDefaultActiveState(balance);
+
+  assert.equal(getGoblinCannonLevel(balance, state), 1);
+  state.goblinsInput.goblinPurchaseLevel = 10;
+  const row = buildDeliveryProjection(balance, state, 1).rows[0];
+  assert.equal(getGoblinCannonLevel(balance, state), 9);
+  assert.equal(row.numericValue, 12);
+});
+
+test("delivery percentages display one decimal place", () => {
+  assert.equal(percentageFormat(12.34, 1), "12.3%");
+  assert.equal(percentageFormat(0, 1), "0.0%");
+});
+
+test("purchase price and generator effects use regular number formatting", () => {
+  const balance = loadBalance("evergreen");
+  const summary = buildSummaryProjection(
+    balance,
+    createDefaultActiveState(balance),
+  );
+  assert.equal(
+    summary.globalEffects.find((row) => row.id === "GoblinPurchasePrice")
+      ?.valueLabel,
+    "/1",
+  );
+  assert.equal(
+    summary.globalEffects.find((row) => row.id === "GeneratorCurrencyMult")
+      ?.valueLabel,
+    "x1",
+  );
+});
+
+test("card unlock descriptions follow map progression", () => {
+  const evergreen = loadBalance("evergreen");
+  const evergreenCards = buildCardProjections(
+    evergreen,
+    createDefaultActiveState(evergreen),
+  );
+  assert.equal(
+    evergreenCards.find((row) => row.card.Id === "ca003")?.unlockLabel,
+    "Mine 3",
+  );
+
+  const arctic = loadBalance("arctic");
+  const arcticCards = buildCardProjections(
+    arctic,
+    createDefaultActiveState(arctic),
+  );
+  assert.equal(
+    arcticCards.find((row) => row.card.Id === "ca001")?.unlockLabel,
+    "Forge mineshaft",
+  );
+  assert.equal(
+    arcticCards.find((row) => row.card.Id === "ca004")?.unlockLabel,
+    "Agate mineshaft",
+  );
+  assert.equal(
+    arcticCards.find((row) => row.card.Id === "ca026")?.unlockLabel,
+    "Checkpoint 1",
+  );
+
+  const christmas = loadBalance("christmas");
+  const christmasCards = buildCardProjections(
+    christmas,
+    createDefaultActiveState(christmas),
+  );
+  assert.equal(
+    christmasCards.find((row) => row.card.Id === "ca001")?.unlockLabel,
+    "Mine 1: Forge mineshaft",
+  );
+  assert.equal(
+    christmasCards.find((row) => row.card.Id === "ca026")?.unlockLabel,
+    "Mine 2: Forge mineshaft",
+  );
+  assert.equal(
+    christmasCards.some((row) => /^\d+$/.test(row.unlockLabel)),
+    false,
+  );
+});
+
+test("fresh delivery counts use cumulative exponential delays", () => {
+  const balance = deliveryBalance([]);
+  balance.BalanceProperties[0].DeliveryDelaySecBase = 10;
+  balance.BalanceProperties[0].DeliveryDelaySecGrowth = 1;
+  assert.equal(deliveriesPerHour(balance), 360);
+});
+
+test("manual Goblin King level zero maps to owned internal level one", () => {
+  const balance = loadBalance("evergreen");
+  const state = createDefaultActiveState(balance);
+  const goblinKing = balance.Cards.find((card) => card.StatModifierType === 26);
+  assert.ok(goblinKing);
+
+  const projection = buildCardProjections(balance, state).find(
+    (row) => row.card.Id === goblinKing.Id,
+  );
+  assert.ok(projection);
+  assert.equal(projection.level, 1);
+  assert.equal(projection.displayLevel, 0);
+  assert.notEqual(projection.effect, 0);
+
+  state.cardsInput[goblinKing.Id] = { level: 0, quantity: 0 };
+  const lockedProjection = buildCardProjections(balance, state).find(
+    (row) => row.card.Id === goblinKing.Id,
+  );
+  assert.equal(lockedProjection?.effect, 0);
 });
 
 test("active delivery farming repeats the claim-count reset boundary", () => {
