@@ -1,8 +1,8 @@
 import type { SummaryProjection } from "../types/derivedTypes";
 import { numberFormat } from "../game/format";
-import { DerivedCalculationsTable } from "./DerivedCalculationsTable";
-import { GlobalEffectsTable } from "./GlobalEffectsTable";
-import { IncomeTable } from "./IncomeTable";
+import { DerivedCalculationsTable } from "../components/DerivedCalculationsTable";
+import { GlobalEffectsTable } from "../components/GlobalEffectsTable";
+import { IncomeTable } from "../components/IncomeTable";
 
 export function SummaryView({ projection }: { projection: SummaryProjection }) {
   return (

@@ -1,39 +1,43 @@
-// This will not be finished yet
+export type Int64Json = string | number;
 
-export type UniverseSave = {
-  SerializationVersion: number;
-  Evergreen?: WorldSave;
-  Lte?: WorldSave;
-  LastSave: string;
-  SaveVersion: number;
+export type RawUniverseSave = {
+  SerializationVersion?: number;
+  Evergreen?: RawWorldSave;
+  Lte?: RawWorldSave;
+  LastSave?: Int64Json;
+  HardCurrencyValue?: number;
+  SaveVersion?: number;
 };
 
-export type WorldSave = {
-  BalanceId: string;
-  WorldType: "EVERGREEN" | "LTE" | number;
-  Zone?: WorldZoneSave;
-  Cards?: OwnedCardSave[];
+export type RawWorldSave = {
+  BalanceId?: string;
+  WorldType?: "EVERGREEN" | "LTE" | number;
+  StringMap?: string[];
+  Zone?: RawZoneSave;
+  Cards?: RawCardSave[];
   DeliveryClaimCount?: number;
-  DeliveryTime?: string | number;
-  DeliveryClaimCountResetTime?: string | number;
-  DeliveryDupeReset?: string | number;
+  DeliveryTime?: Int64Json;
+  DeliveryClaimCountResetTime?: Int64Json;
+  DeliveryDupeReset?: Int64Json;
   ClaimedDeliveryDupeIds?: string[];
   ClaimedDeliveryDupeCounts?: number[];
+  RewardCycles?: RawRewardCycleSave[];
+  FreeGachas?: RawFreeGachaSave[];
   Rank?: number;
-  LastSaveTimestampSeconds?: string | number;
+  SoftCurrencyValue?: number;
 };
 
-export type WorldZoneSave = {
-  Id: string;
-  Width: number;
-  Depth: number;
-  Grid?: WorldGridCellSave[];
+export type RawZoneSave = {
+  Id?: string;
+  Width?: number;
+  Depth?: number;
+  Grid?: RawGridCellSave[];
   ReinforcementsLevel?: number;
   ClearedCheckPointLevelVals?: number[];
   CoreCurrencyValue?: number;
 };
 
-export type WorldGridCellSave = {
+export type RawGridCellSave = {
   Key?: string;
   Id?: number;
   Level?: number;
@@ -46,9 +50,24 @@ export type WorldGridCellSave = {
   TertiaryLevel?: number;
 };
 
-export type OwnedCardSave = {
-  Id: string;
-  Quantity: number;
-  Level: number;
-  IsNew?: boolean;
+export type RawCardSave = {
+  Id?: string;
+  Level?: number;
 };
+
+export type RawRewardCycleSave = {
+  Id?: string;
+  Index?: number;
+};
+
+export type RawFreeGachaSave = {
+  Index?: number;
+  Available?: Int64Json;
+};
+
+// Compatibility aliases for older imports while the save parser is introduced.
+export type UniverseSave = RawUniverseSave;
+export type WorldSave = RawWorldSave;
+export type WorldZoneSave = RawZoneSave;
+export type WorldGridCellSave = RawGridCellSave;
+export type OwnedCardSave = RawCardSave;

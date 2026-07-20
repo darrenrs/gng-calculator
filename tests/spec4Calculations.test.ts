@@ -392,7 +392,7 @@ test("card unlock descriptions follow map progression", () => {
   );
   assert.equal(
     arcticCards.find((row) => row.card.Id === "ca001")?.unlockLabel,
-    "Forge mineshaft",
+    "Beginning",
   );
   assert.equal(
     arcticCards.find((row) => row.card.Id === "ca004")?.unlockLabel,
@@ -410,11 +410,11 @@ test("card unlock descriptions follow map progression", () => {
   );
   assert.equal(
     christmasCards.find((row) => row.card.Id === "ca001")?.unlockLabel,
-    "Mine 1: Forge mineshaft",
+    "Mine 1: Beginning",
   );
   assert.equal(
     christmasCards.find((row) => row.card.Id === "ca026")?.unlockLabel,
-    "Mine 2: Forge mineshaft",
+    "Mine 2: Beginning",
   );
   assert.equal(
     christmasCards.some((row) => /^\d+$/.test(row.unlockLabel)),

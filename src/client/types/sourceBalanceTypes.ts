@@ -287,8 +287,8 @@ export enum GachaType {
 }
 
 export type Delivery = {
-  Id: number;
-  RewardModel: RewardModel[];
+  Id: string | number;
+  RewardModel: RewardModel | RewardModel[];
   QuantityBase: number;
   QuantityMultiplier: number;
   QuantityGrowth: number;

@@ -10,6 +10,7 @@ import type {
   Gacha,
   RankMultiplier,
 } from "../types/sourceBalanceTypes";
+import { NumericInput } from "../components/NumericInput";
 
 interface GachaViewProps {
   balance: Balance;
@@ -49,8 +50,7 @@ export function GachaView({
             >
               Unlocked Checkpoints and Shafts
             </label>
-            <input
-              className="gng-number-input"
+            <NumericInput
               id="unlockedCheckpointsAndShafts"
               readOnly
               value={projection.unlockedCheckpointsAndShafts}
@@ -61,22 +61,14 @@ export function GachaView({
               <label htmlFor="cardIncreaseRareLvl" className="form-label">
                 Cards+ Level
               </label>
-              <input
-                className="gng-number-input"
+              <NumericInput
                 id="cardIncreaseRareLvl"
                 max={maxCardLevel(balance, card16)}
                 min={0}
-                type="number"
-                onChange={(event) =>
+                onValueChange={(value) =>
                   onCardLevelChange(
                     card16.Id,
-                    Math.max(
-                      0,
-                      Math.min(
-                        maxCardLevel(balance, card16),
-                        Math.floor(Number(event.target.value)),
-                      ),
-                    ),
+                    Math.max(0, Math.min(maxCardLevel(balance, card16), value)),
                   )
                 }
                 value={projection.gachaCardLevel}
@@ -84,6 +76,13 @@ export function GachaView({
             </div>
           )}
         </div>
+        {projection.freeGachaIndex !== null && (
+          <div className="mt-3">
+            <strong>Free Gacha Cycle Index:</strong> {projection.freeGachaIndex}
+            {projection.freeGachaAvailableAt &&
+              ` — available ${projection.freeGachaAvailableAt.toLocaleString()}`}
+          </div>
+        )}
       </div>
 
       <div className="table-responsive gng-scroll-pane px-3">

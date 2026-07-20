@@ -19,7 +19,6 @@ import type { ActiveState } from "../types/activeStateTypes";
 import { FORGE_ID } from "../types/activeStateTypes";
 import type {
   CardProjection,
-  DerivedRankState,
   DeliveryProjection,
   DeliveryRowProjection,
   GachaProjection,
@@ -27,9 +26,10 @@ import type {
   LocalizationLookup,
   MapProjection,
   MineshaftProjection,
+  RocksProjection,
   SummaryProjection,
 } from "../types/derivedTypes";
-import type { GlobalEffectId, NamedGlobalEffects } from "../types/derivedTypes";
+import type { GlobalEffectId, NamedGlobalEffects } from "../types/effectTypes";
 import {
   FormulaType,
   GachaType,
@@ -47,13 +47,25 @@ import type {
 import {
   buildMapProjection,
   mapTokenParts,
-  zoneCheckpointCount,
   zoneMineshaftIds,
   zoneMineshaftIdsUnlockedByCheckpoints,
   zoneRankUnlocks,
 } from "./map";
+import {
+  buildDerivedRankState,
+  getSelectedRankMultiplier,
+} from "./rankCalculations";
+import {
+  GLOBAL_EFFECT_LABELS,
+  isGlobalEffectApplicable,
+} from "./effectMetadata";
+import { aggregateEffects } from "./effects";
 
 export { balanceIndexToCssGrid, buildMapProjection } from "./map";
+export {
+  buildDerivedRankState,
+  getSelectedRankMultiplier,
+} from "./rankCalculations";
 
 const RANK_MULTIPLIER_KEYS: Array<keyof RankMultiplier> = [
   "GachaCardsMultNormal",
@@ -69,46 +81,6 @@ const RANK_MULTIPLIER_KEYS: Array<keyof RankMultiplier> = [
   "MiningLeaderboardCurrencyMultiplier",
   "MiningSoftCurrencyMultiplier",
 ];
-
-const GLOBAL_EFFECT_STAT_TYPES: Record<GlobalEffectId, StatModifierType[]> = {
-  GoblinLimitChange: [StatModifierType.MinerUnitCapAddition],
-  GoblinPurchasePrice: [
-    StatModifierType.ReinforcementsCostDivider,
-    StatModifierType.ReinforcementsCostDividerPerCheckPoint,
-  ],
-  GoblinPurchaseLevelChange: [StatModifierType.ReinforcementsLevelAddition],
-  GoblinBaseDamage: [
-    StatModifierType.MinerCritChanceAddition,
-    StatModifierType.MinerCritPowerMult,
-    StatModifierType.AncestralPowerMult,
-  ],
-  GoblinCannonTimerChange: [
-    StatModifierType.MinerSpawnTimeReduction,
-    StatModifierType.MinerSpawnTimeReductionPerCheckPoint,
-  ],
-  GeneratorCurrencyMult: [
-    StatModifierType.CoreCurrencyMultAllGenerators,
-    StatModifierType.CoreCurrencyMultAllGenPerCheckPoint,
-  ],
-  RockCurrencyMult: [StatModifierType.CoreCurrencyPercentAllRocks],
-  DeliveryCurrencyMult: [StatModifierType.CoreCurrencyPercentDeliveries],
-  ProdTimePercentDecrease: [
-    StatModifierType.ProdTimeInversePercentAllGenerators,
-  ],
-  CardsMult: [StatModifierType.CardsMultAllGacha],
-  LteRewardsMult: [StatModifierType.LteRewardsMult],
-  DeliveryDynamiteMult: [StatModifierType.DynamiteDropChanceAddition],
-  RockDoubleGemsPercentChance: [
-    StatModifierType.HardCurrencyDoubledDropChanceAddition,
-  ],
-  DynamiteBaseDamage: [StatModifierType.DynamitePowerMult],
-  RockLegendaryChestMult: [
-    StatModifierType.RockLegendaryChestDropChanceAddition,
-  ],
-  CrusherSpeedMult: [StatModifierType.CrusherSpeedAddition],
-  CrusherBombInterval: [StatModifierType.CrusherBombReduction],
-  GoblinKingDamageModifier: [StatModifierType.GoblinKing],
-};
 
 export function buildCardProjections(
   balance: Balance,
@@ -146,6 +118,11 @@ export function buildMineshaftProjections(
   activeState: ActiveState,
 ): MineshaftProjection[] {
   const cardLevels = cardLevelsFromState(activeState);
+  const aggregatedEffects = aggregateEffects(
+    balance,
+    cardLevels,
+    activeState.mapInput.checkpointsOpened,
+  );
   const map = buildMapProjection(
     balance,
     activeState,
@@ -173,6 +150,7 @@ export function buildMineshaftProjections(
       level,
       cardLevels,
       activeState.mapInput.checkpointsOpened,
+      aggregatedEffects,
     );
     const managers = managerCardsForGenerator(balance, id);
     const automation = automationForGenerator(id, managers, map);
@@ -330,6 +308,21 @@ export function buildSummaryProjection(
       ),
       derivedRow("RawIncomePerSec", "Idle Income / Sec", idleIncomePerSecond),
       derivedRow(
+        "CurrentCoreCurrency",
+        "Current Core Currency",
+        activeState.currenciesInput.coreCurrency,
+      ),
+      derivedRow(
+        "CurrentSoftCurrency",
+        "Current Elixir",
+        activeState.currenciesInput.softCurrency,
+      ),
+      derivedRow(
+        "CurrentHardCurrency",
+        "Current Gems",
+        activeState.currenciesInput.hardCurrency,
+      ),
+      derivedRow(
         "MineshaftsOpened",
         "Total number of mineshafts opened",
         new Set(activeState.mapInput.mineshaftIdsOpened).size,
@@ -353,54 +346,6 @@ export function buildSummaryProjection(
         }))
       : [],
   };
-}
-
-export function buildDerivedRankState(
-  balance: Balance,
-  activeState: ActiveState,
-): DerivedRankState {
-  const zoneIndex = Math.max(
-    0,
-    balance.Zones.findIndex((zone) => zone.Id === activeState.selectedZoneId),
-  );
-  const currentZone = balance.Zones[zoneIndex] ?? balance.Zones[0];
-  const openedIds = new Set(activeState.mapInput.mineshaftIdsOpened);
-  const openCurrentMineshaftsIncludingForge =
-    1 + zoneMineshaftIds(currentZone).filter((id) => openedIds.has(id)).length;
-  const currentProgress =
-    openCurrentMineshaftsIncludingForge +
-    activeState.mapInput.checkpointsOpened;
-  const rankUpType = balance.BalanceProperties[0]?.RankUpType;
-
-  if (rankUpType === RankUpType.Zone) {
-    return { rankMultiplierIndex: 0, globalRank: zoneIndex + 1 };
-  }
-  if (rankUpType === RankUpType.MineShaftAndCheckPointAndZone) {
-    const completedPreviousRanks = balance.Zones.slice(0, zoneIndex).reduce(
-      (total, zone) =>
-        total + zoneMineshaftIds(zone).length + zoneCheckpointCount(zone) + 1,
-      0,
-    );
-    return {
-      rankMultiplierIndex: currentProgress - 1,
-      globalRank: completedPreviousRanks + currentProgress,
-    };
-  }
-  return {
-    rankMultiplierIndex: currentProgress - 1,
-    globalRank: currentProgress,
-  };
-}
-
-export function getSelectedRankMultiplier(
-  balance: Balance,
-  activeState: ActiveState,
-  rank = buildDerivedRankState(balance, activeState),
-): RankMultiplier | undefined {
-  const zone =
-    balance.Zones.find((item) => item.Id === activeState.selectedZoneId) ??
-    balance.Zones[0];
-  return zone?.RankMultipliers[rank.rankMultiplierIndex];
 }
 
 export function getGoblinCannonLevel(
@@ -495,6 +440,7 @@ export function buildDeliveryProjection(
   incomePerSecond: number,
 ): DeliveryProjection {
   const globalRank = buildDerivedRankState(balance, activeState).globalRank;
+  const effects = buildNamedGlobalEffects(balance, activeState);
   const initialRows = balance.Deliveries.map((delivery) =>
     buildDeliveryRow(
       balance,
@@ -502,15 +448,16 @@ export function buildDeliveryProjection(
       delivery,
       incomePerSecond,
       globalRank,
+      effects,
     ),
   );
   const unlockedWeight = initialRows.reduce(
-    (total, row) => total + (row.unlocked ? row.oddsWeight : 0),
+    (total, row) => total + (row.eligibleForNext ? row.oddsWeight : 0),
     0,
   );
   const rows = initialRows.map((row) => ({
     ...row,
-    nextDeliveryPercent: row.unlocked
+    nextDeliveryPercent: row.eligibleForNext
       ? (row.oddsWeight / unlockedWeight) * 100
       : 0,
   }));
@@ -533,6 +480,10 @@ export function buildDeliveryProjection(
       balance.BalanceProperties[0]?.DeliveryClaimCountResetSec ?? 0,
     maxDupesResetSeconds:
       balance.BalanceProperties[0]?.DeliveryMaxDupesResetSec ?? 0,
+    claimCount: activeState.deliveryInput.claimCount,
+    nextDeliveryAt: activeState.deliveryInput.nextDeliveryAt,
+    claimCountResetsAt: activeState.deliveryInput.claimCountResetsAt,
+    duplicateCycleResetsAt: activeState.deliveryInput.duplicateCycleResetsAt,
   };
 }
 
@@ -568,6 +519,16 @@ export function buildGachaProjection(
           gacha.Id === "GachaLegendary"
         ),
     ),
+    freeGachaIndex: activeState.freeGachaInput?.index ?? null,
+    freeGachaAvailableAt: activeState.freeGachaInput?.availableAt ?? null,
+  };
+}
+
+export function buildRocksProjection(
+  activeState: ActiveState,
+): RocksProjection {
+  return {
+    rewardCycles: activeState.rewardCyclesInput.map((cycle) => ({ ...cycle })),
   };
 }
 
@@ -617,14 +578,17 @@ function buildDeliveryRow(
   delivery: Delivery,
   incomePerSecond: number,
   globalRank: number,
+  effects: NamedGlobalEffects,
 ): DeliveryRowProjection {
   const rewardName = deliveryName(delivery);
   const reward = deliveryReward(delivery);
-  const effects = buildNamedGlobalEffects(balance, activeState);
   const oddsWeight =
     reward.DetailedType === "Dynamite"
       ? Math.round(delivery.Weight * effects.DeliveryDynamiteMult)
       : delivery.Weight;
+  const count =
+    activeState.deliveryInput.claimedCountsById[String(delivery.Id)] ?? 0;
+  const unlocked = globalRank >= delivery.RankUnlock;
   return {
     source: delivery,
     rewardName,
@@ -634,12 +598,15 @@ function buildDeliveryRow(
       delivery,
       incomePerSecond,
       globalRank,
+      effects,
     ),
     rawWeight: delivery.Weight,
     oddsWeight,
     nextDeliveryPercent: 0,
-    unlocked: globalRank >= delivery.RankUnlock,
-    count: 0,
+    unlocked,
+    eligibleForNext:
+      unlocked && (delivery.MaxDupes === -1 || count < delivery.MaxDupes),
+    count,
     total: delivery.MaxDupes,
   };
 }
@@ -663,6 +630,7 @@ function deliveryValue(
   delivery: Delivery,
   incomePerSecond: number,
   globalRank: number,
+  effects: NamedGlobalEffects,
 ): Pick<DeliveryRowProjection, "valueLabel" | "numericValue"> {
   const reward = deliveryReward(delivery);
   switch (reward.DetailedType) {
@@ -683,10 +651,7 @@ function deliveryValue(
     case "Soft":
       return { valueLabel: "??", numericValue: null };
     case "Core": {
-      const deliveryCurrencyMult = buildNamedGlobalEffects(
-        balance,
-        activeState,
-      ).DeliveryCurrencyMult;
+      const deliveryCurrencyMult = effects.DeliveryCurrencyMult;
       const numericValue =
         incomePerSecond *
         coreDeliveryQuantity(delivery, globalRank) *
@@ -752,26 +717,44 @@ function activeDeliveryIncomePerSecond(
     .sort((a, b) => b.row.oddsWeight - a.row.oddsWeight || a.index - b.index)
     .map(({ row }) => row);
   let time = 0;
-  let claimCount = 0;
-  let nextClaimCountReset = props.DeliveryClaimCountResetSec;
+  let claimCount = activeState.deliveryInput.claimCount;
+  const now = Date.now();
+  let nextClaimCountReset = secondsUntil(
+    activeState.deliveryInput.claimCountResetsAt,
+    now,
+    props.DeliveryClaimCountResetSec,
+  );
+  const simulationSeconds = secondsUntil(
+    activeState.deliveryInput.duplicateCycleResetsAt,
+    now,
+    props.DeliveryMaxDupesResetSec,
+  );
   let totalCore = 0;
-  const claimed = new Map<number, number>();
-  while (time < props.DeliveryMaxDupesResetSec) {
+  const claimed = new Map<string, number>(
+    Object.entries(activeState.deliveryInput.claimedCountsById),
+  );
+  let firstDelivery = true;
+  while (time < simulationSeconds) {
     const next =
-      props.DeliveryDelaySecBase * props.DeliveryDelaySecGrowth ** claimCount;
+      firstDelivery && activeState.deliveryInput.nextDeliveryAt
+        ? secondsUntil(activeState.deliveryInput.nextDeliveryAt, now, 0)
+        : props.DeliveryDelaySecBase *
+          props.DeliveryDelaySecGrowth ** claimCount;
+    firstDelivery = false;
     time += next;
-    if (time > props.DeliveryMaxDupesResetSec) {
+    if (time > simulationSeconds) {
       break;
     }
     const row = orderedRows.find((candidate) => {
-      const count = claimed.get(candidate.source.Id) ?? 0;
+      const count = claimed.get(String(candidate.source.Id)) ?? 0;
       return candidate.total === -1 || count < candidate.total;
     });
     if (row && deliveryReward(row.source).DetailedType === "Core") {
       totalCore += row.numericValue ?? 0;
     }
     if (row) {
-      claimed.set(row.source.Id, (claimed.get(row.source.Id) ?? 0) + 1);
+      const id = String(row.source.Id);
+      claimed.set(id, (claimed.get(id) ?? 0) + 1);
     }
     claimCount += 1;
     while (
@@ -783,7 +766,16 @@ function activeDeliveryIncomePerSecond(
     }
   }
 
-  return totalCore / props.DeliveryMaxDupesResetSec;
+  return simulationSeconds > 0 ? totalCore / simulationSeconds : 0;
+}
+
+function secondsUntil(
+  date: Date | null,
+  nowMilliseconds: number,
+  fallbackSeconds: number,
+): number {
+  if (!date) return fallbackSeconds;
+  return Math.max(0, (date.getTime() - nowMilliseconds) / 1000);
 }
 
 function goblinSpawnIntervalSeconds(
@@ -805,27 +797,6 @@ function goblinSpawnIntervalSeconds(
     base - buildNamedGlobalEffects(balance, activeState).GoblinCannonTimerChange
   );
 }
-
-const GLOBAL_EFFECT_LABELS: Record<GlobalEffectId, string> = {
-  GoblinLimitChange: "Goblin Limit Change",
-  GoblinPurchasePrice: "Goblin Discount",
-  GoblinPurchaseLevelChange: "Goblin Purchase Level Change",
-  GoblinBaseDamage: "Goblin Base Damage",
-  GoblinCannonTimerChange: "Goblin Spawn Time Reduction",
-  GeneratorCurrencyMult: "Global Generator Currency Multiplier",
-  RockCurrencyMult: "Rock Currency Multiplier",
-  DeliveryCurrencyMult: "Delivery Currency Multiplier",
-  ProdTimePercentDecrease: "Production Time Percentage Decrease",
-  CardsMult: "Chest Card Count Multiplier",
-  LteRewardsMult: "Event Rewards Multiplier",
-  DeliveryDynamiteMult: "Dynamite Delivery Odds Multiplier",
-  RockDoubleGemsPercentChance: "Rock Double Gems Percent Chance",
-  DynamiteBaseDamage: "Dynamite Base Damage",
-  RockLegendaryChestMult: "Rock Legendary Chest Odds Multiplier",
-  CrusherSpeedMult: "Crusher Speed Multiplier",
-  CrusherBombInterval: "Crusher Bomb Time Interval",
-  GoblinKingDamageModifier: "Goblin King Damage Effect",
-};
 
 function buildGlobalEffectProjections(
   balance: Balance,
@@ -899,7 +870,9 @@ function cardUnlockLabel(
         const description =
           unlock.kind === "checkpoint"
             ? `Checkpoint ${unlock.checkpointNumber}`
-            : `${mineshaftName(unlock.mineshaftId, t)} mineshaft`;
+            : unlock.mineshaftId === FORGE_ID
+              ? "Beginning"
+              : `${mineshaftName(unlock.mineshaftId, t)} mineshaft`;
         return rankUpType === RankUpType.MineShaftAndCheckPointAndZone
           ? `Mine ${zoneIndex + 1}: ${description}`
           : description;
@@ -911,7 +884,7 @@ function cardUnlockLabel(
       card.MineUnlock === globalRank &&
       zoneIndex + 1 < balance.Zones.length
     ) {
-      return `Mine ${zoneIndex + 2}: Forge mineshaft`;
+      return `Mine ${zoneIndex + 2}: Beginning`;
     }
   }
   return String(card.MineUnlock);
@@ -920,22 +893,6 @@ function cardUnlockLabel(
 function mineshaftName(id: string, t?: LocalizationLookup): string {
   if (id === FORGE_ID) return "Forge";
   return t?.(`mineshaft.name.${id}`, titleCase(id)) ?? titleCase(id);
-}
-
-function isGlobalEffectApplicable(
-  balance: Balance,
-  id: GlobalEffectId,
-): boolean {
-  if (id === "GoblinBaseDamage" && balance.Miners.length > 0) return true;
-  if (id === "DynamiteBaseDamage" && balance.Spells.length > 0) return true;
-
-  const types = new Set(GLOBAL_EFFECT_STAT_TYPES[id]);
-  return (
-    balance.Cards.some((card) => types.has(card.StatModifierType)) ||
-    balance.CheckPoint.some((checkpoint) =>
-      checkpoint.StatModifierType.some((type) => types.has(type)),
-    )
-  );
 }
 
 function formatModifierValue(value: number, statModifierType: number): string {

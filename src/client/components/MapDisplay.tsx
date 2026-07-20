@@ -33,7 +33,9 @@ export function MapDisplay({ map }: { map: MapProjection }) {
 
 function MapObject({ cell }: { cell: MapDisplayCell }) {
   const isInteractive = cell.kind !== "obstruction";
-  const title = `${cell.token}\n(Col ${cell.col + 1}, Row ${cell.row + 1})`;
+  const title =
+    cell.tooltip ??
+    `${cell.token}\n(Col ${cell.col + 1}, Row ${cell.row + 1}) ${cell.checkpointId}`;
   return (
     <div
       className={`gng-map-object gng-map-object-${cell.kind} gng-map-cell-${cell.token.charAt(0)} ${

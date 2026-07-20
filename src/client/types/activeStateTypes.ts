@@ -7,11 +7,20 @@ export type ActiveState = {
   balanceId: string;
   selectedZoneId: string;
   maximumCurrency: number;
+  currenciesInput: CurrencyInput;
   mapInput: MapInput;
   goblinsInput: GoblinInput;
   cardsInput: Record<string, CardInput>;
   generatorsInput: Record<string, GeneratorInput>;
-  deliveriesInput: Record<string, DeliveryInput>;
+  deliveryInput: DeliveryInput;
+  freeGachaInput: FreeGachaInput | null;
+  rewardCyclesInput: RewardCycleInput[];
+};
+
+export type CurrencyInput = {
+  coreCurrency: number;
+  softCurrency: number;
+  hardCurrency: number;
 };
 
 export type MapInput = {
@@ -33,7 +42,23 @@ export type GeneratorInput = {
   level: number;
 };
 
-export type DeliveryInput = Record<string, never>;
+export type DeliveryInput = {
+  claimCount: number;
+  nextDeliveryAt: Date | null;
+  claimCountResetsAt: Date | null;
+  duplicateCycleResetsAt: Date | null;
+  claimedCountsById: Record<string, number>;
+};
+
+export type FreeGachaInput = {
+  index: number;
+  availableAt: Date | null;
+};
+
+export type RewardCycleInput = {
+  id: string;
+  index: number;
+};
 
 export function createDefaultActiveState(
   balance: Balance,
@@ -45,6 +70,11 @@ export function createDefaultActiveState(
     maximumCurrency:
       balance.BalanceProperties[0]?.AntiCheatSettings?.CoreCurrencyMax ??
       Infinity,
+    currenciesInput: {
+      coreCurrency: 0,
+      softCurrency: 0,
+      hardCurrency: 0,
+    },
     mapInput: {
       checkpointsOpened: 0,
       mineshaftIdsOpened: [FORGE_ID],
@@ -61,7 +91,15 @@ export function createDefaultActiveState(
     generatorsInput: {
       [FORGE_ID]: { level: 1 },
     },
-    deliveriesInput: {},
+    deliveryInput: {
+      claimCount: 0,
+      nextDeliveryAt: null,
+      claimCountResetsAt: null,
+      duplicateCycleResetsAt: null,
+      claimedCountsById: {},
+    },
+    freeGachaInput: null,
+    rewardCyclesInput: [],
   };
 }
 

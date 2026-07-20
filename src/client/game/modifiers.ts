@@ -10,34 +10,6 @@ export type ModifierInput = {
   ModifierRound?: number;
 };
 
-// Modifiers for 14, 17, 18 exist in game code but are not seen anywhere
-export const STAT_MODIFIER_LOCALIZATION_KEYS: Record<number, string> = {
-  1: "statbonus.minerunitcapaddition.name.long",
-  2: "statbonus.reinforcementscostdivider.name",
-  3: "statbonus.reinforcementscostdividerpercheckpoint.name.long",
-  4: "statbonus.reinforcementsleveladdition.name.long",
-  5: "statbonus.minercritchanceaddition.name.long",
-  6: "statbonus.minercritpowermult.name.long",
-  7: "statbonus.minerspawntimereduction.name.long",
-  8: "statbonus.minerspawntimereductionpercheckpoint.name.long",
-  9: "statbonus.corecurrencymulttargetgenerators.name.long",
-  10: "statbonus.corecurrencymultallgenerators.name.long",
-  11: "statbonus.corecurrencymultallgenpercheckpoint.name.long",
-  12: "statbonus.corecurrencypercentallrocks.name.long",
-  13: "statbonus.corecurrencypercentdeliveries.name.long",
-  15: "statbonus.prodtimeinversepercentallgenerators.name.long",
-  16: "statbonus.cardsmultallgacha.name.long",
-  19: "statbonus.LteRewardsMult.name.long",
-  20: "statbonus.dynamitedropchanceaddition.name.long",
-  21: "statbonus.hardcurrencydoubleddropchanceaddition.name.long",
-  22: "statbonus.dynamitepowermult.name.long",
-  23: "statbonus.rocklegendarychestdropchanceaddition.name.long",
-  24: "statbonus.crusherspeedaddition.name.long",
-  25: "statbonus.crusherbombreduction.name.long",
-  26: "statbonus.GoblinKing.name.long",
-  27: "statbonus.AncestralPowerMult.name.long",
-};
-
 export type FormulaInput = {
   baseValue: number;
   multiplier?: number;

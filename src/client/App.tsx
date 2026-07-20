@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getBalance,
   getBalanceIds,
@@ -19,6 +19,7 @@ import {
   buildGoblinCostProjection,
   buildMapProjection,
   buildMineshaftProjections,
+  buildRocksProjection,
   buildSummaryProjection,
   getSelectedRankMultiplier,
 } from "./game/projections";
@@ -33,6 +34,15 @@ import { MapView } from "./views/MapView";
 import { MineshaftsView } from "./views/MineshaftsView";
 import { SaveView } from "./views/SaveView";
 import { SummaryView } from "./views/SummaryView";
+import { RocksView } from "./views/RocksView";
+import { NumericInput } from "./components/NumericInput";
+import { hydrateActiveStateFromSave } from "./game/saveHydration";
+import type {
+  ImportedMapSnapshot,
+  ParsedSave,
+  ParsedWorldSave,
+} from "./types/parsedSaveTypes";
+import type { LoadedSaveSummary } from "./views/SaveView";
 
 const FALLBACK_BALANCE_ID = "evergreen";
 const views: Array<{ id: AppViewId; label: string }> = [
@@ -62,6 +72,11 @@ export function App() {
   const [activeView, setActiveView] = useState<AppViewId>("summary");
   const [balancePanelOpen, setBalancePanelOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [importedMapSnapshot, setImportedMapSnapshot] =
+    useState<ImportedMapSnapshot | null>(null);
+  const [mapSnapshotStale, setMapSnapshotStale] = useState(false);
+  const [loadedSave, setLoadedSave] = useState<LoadedSaveSummary | null>(null);
+  const balanceRequestVersion = useRef(0);
 
   const localization = useMemo(
     () => parseLocalization(localizationText),
@@ -76,6 +91,7 @@ export function App() {
   const selectedScheduleEntry = schedule.find(
     (entry) => entry.Id === selectedScheduleEntryId,
   );
+  const currentScheduleEntry = schedule.find(isScheduleEntryCurrent);
 
   useEffect(() => {
     Promise.allSettled([
@@ -103,15 +119,25 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (
+      balance?.Id === selectedBalanceId &&
+      activeState?.balanceId === selectedBalanceId &&
+      activeState.selectedZoneId === pendingDefaultZoneId
+    ) {
+      return;
+    }
+    const requestVersion = ++balanceRequestVersion.current;
     setBalance(null);
     setActiveState(null);
     getBalance(selectedBalanceId)
       .then((data) => {
+        if (requestVersion !== balanceRequestVersion.current) return;
         setBalance(data);
         setActiveState(createDefaultActiveState(data, pendingDefaultZoneId));
         setError(null);
       })
       .catch((err) => {
+        if (requestVersion !== balanceRequestVersion.current) return;
         setError(`${err.message} error`);
       });
   }, [selectedBalanceId, pendingDefaultZoneId]);
@@ -124,9 +150,13 @@ export function App() {
             activeState,
             activeState.selectedZoneId,
             t,
+            {
+              importedSnapshot: importedMapSnapshot,
+              snapshotStale: mapSnapshotStale,
+            },
           )
         : null,
-    [balance, activeState, localization],
+    [balance, activeState, localization, importedMapSnapshot, mapSnapshotStale],
   );
   const cardProjections = useMemo(
     () =>
@@ -177,12 +207,24 @@ export function App() {
         : null,
     [balance, activeState],
   );
+  const rocksProjection = useMemo(
+    () => (activeState ? buildRocksProjection(activeState) : null),
+    [activeState],
+  );
 
   function updateActiveState(updater: (state: ActiveState) => ActiveState) {
     setActiveState((state) => (state ? updater(state) : state));
+    setLoadedSave((loaded) =>
+      loaded ? { ...loaded, modified: true } : loaded,
+    );
+  }
+
+  function markImportedMapStale() {
+    if (importedMapSnapshot) setMapSnapshotStale(true);
   }
 
   function setSelectedZoneId(zoneId: string) {
+    markImportedMapStale();
     updateActiveState((state) => ({ ...state, selectedZoneId: zoneId }));
   }
 
@@ -231,6 +273,7 @@ export function App() {
   }
 
   function setGeneratorLevel(generatorId: string, level: number) {
+    markImportedMapStale();
     updateActiveState((state) => {
       const normalizedLevel = Number.isFinite(level)
         ? Math.max(0, Math.floor(level))
@@ -262,6 +305,7 @@ export function App() {
   }
 
   function setGeneratorOpened(generatorId: string, opened: boolean) {
+    markImportedMapStale();
     updateActiveState((state) => {
       const zone = balance?.Zones.find(
         (candidate) => candidate.Id === state.selectedZoneId,
@@ -304,6 +348,7 @@ export function App() {
   }
 
   function setCheckpointCount(count: number) {
+    markImportedMapStale();
     updateActiveState((state) => {
       const zone = balance?.Zones.find(
         (candidate) => candidate.Id === state.selectedZoneId,
@@ -313,11 +358,12 @@ export function App() {
       );
       openedIds.add("spawningcart");
       const generatorsInput = { ...state.generatorsInput };
-      for (const generator of [
-        ...(balance?.MineShafts ?? []),
-        ...(balance?.SpawningCart ?? []),
+      for (const id of [
+        "spawningcart",
+        ...(balance?.MineShafts.map((generator) => generator.Id).filter(
+          (id): id is string => Boolean(id),
+        ) ?? []),
       ]) {
-        const id = generator.Id;
         const wasOpened = state.mapInput.mineshaftIdsOpened.includes(id);
         generatorsInput[id] = {
           level: openedIds.has(id)
@@ -387,6 +433,55 @@ export function App() {
     });
   }
 
+  async function loadSaveWorld(save: ParsedSave, world: ParsedWorldSave) {
+    const eventEntry = schedule.find(isScheduleEntryCurrent);
+    if (
+      world.kind === "lte" &&
+      (!eventEntry || world.balanceId !== eventEntry.GameDataId)
+    ) {
+      throw new Error(
+        `Saved event ${world.balanceId} does not match the current scheduled event ${eventEntry?.GameDataId ?? "none"}`,
+      );
+    }
+
+    const requestVersion = ++balanceRequestVersion.current;
+    const nextBalance = await getBalance(world.balanceId);
+    if (requestVersion !== balanceRequestVersion.current) return;
+    const hydrated = hydrateActiveStateFromSave(nextBalance, save, world);
+    if (hydrated.savedRank !== hydrated.derivedGlobalRank) {
+      console.warn("Saved rank does not match derived globalRank", {
+        world: world.kind,
+        balanceId: world.balanceId,
+        zoneId: world.zone.id,
+        savedRank: hydrated.savedRank,
+        derivedGlobalRank: hydrated.derivedGlobalRank,
+      });
+    }
+
+    setBalance(nextBalance);
+    setActiveState(hydrated.activeState);
+    setSelectedBalanceId(world.balanceId);
+    setPendingDefaultZoneId(world.zone.id);
+    setSelectedScheduleEntryId(world.kind === "lte" ? eventEntry!.Id : null);
+    setImportedMapSnapshot(hydrated.mapSnapshot);
+    setMapSnapshotStale(false);
+    setLoadedSave({
+      worldLabel: world.kind === "evergreen" ? "Main Mines" : "Event",
+      balanceId: world.balanceId,
+      lastSavedAt: save.lastSavedAt,
+      modified: false,
+      diagnostics: hydrated.diagnostics,
+    });
+    setBalancePanelOpen(false);
+    setError(null);
+  }
+
+  function clearImportedSave() {
+    setImportedMapSnapshot(null);
+    setMapSnapshotStale(false);
+    setLoadedSave(null);
+  }
+
   return (
     <>
       <header className="navbar bg-body-tertiary px-3 gng-header">
@@ -430,12 +525,14 @@ export function App() {
           selectedBalanceId={selectedBalanceId}
           selectedScheduleEntryId={selectedScheduleEntryId}
           setDirectBalance={(balanceId) => {
+            clearImportedSave();
             setSelectedScheduleEntryId(null);
             setPendingDefaultZoneId("zone1");
             setSelectedBalanceId(balanceId);
             setBalancePanelOpen(false);
           }}
           setScheduleEntry={(entry) => {
+            clearImportedSave();
             setSelectedScheduleEntryId(entry.Id);
             setPendingDefaultZoneId(`zone${entry.ExclusiveZoneNumber}`);
             setSelectedBalanceId(entry.GameDataId);
@@ -534,8 +631,16 @@ export function App() {
               t={t}
             />
           )}
-        {activeView === "save" && <SaveView />}
-        {activeView === "rocks" && <div className="p-3">TBD</div>}
+        {activeView === "save" && (
+          <SaveView
+            currentEvent={currentScheduleEntry}
+            loadedSave={loadedSave}
+            onLoadWorld={loadSaveWorld}
+          />
+        )}
+        {activeView === "rocks" && rocksProjection && (
+          <RocksView projection={rocksProjection} />
+        )}
       </main>
 
       <footer className="p-3">
@@ -710,19 +815,15 @@ function ZoneSelector({
         Mine
       </label>
       <div className="gng-inline-number">
-        <input
+        <NumericInput
           id="globalZoneSelect"
           max={balance.Zones.length}
           min={1}
-          type="number"
           value={zoneIndex + 1}
-          onChange={(event) => {
+          onValueChange={(value) => {
             const nextIndex = Math.max(
               0,
-              Math.min(
-                balance.Zones.length - 1,
-                Math.floor(Number(event.target.value)) - 1,
-              ),
+              Math.min(balance.Zones.length - 1, value - 1),
             );
             onChange(balance.Zones[nextIndex]?.Id ?? selectedZoneId);
           }}
@@ -748,6 +849,15 @@ function isScheduleEntryActive(entry: LteScheduleEntry): boolean {
     999,
   );
   return new Date() <= endOfLocalDay;
+}
+
+function isScheduleEntryCurrent(entry: LteScheduleEntry): boolean {
+  const start = new Date(entry.StartDateTimeUtc).getTime();
+  const end = new Date(entry.EndDateTimeUtc).getTime();
+  const now = Date.now();
+  return (
+    Number.isFinite(start) && Number.isFinite(end) && start <= now && now <= end
+  );
 }
 
 function formatDate(value: string): string {

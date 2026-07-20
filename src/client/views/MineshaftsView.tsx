@@ -9,6 +9,7 @@ import {
   generatorUpgradeCostRange,
 } from "../game/balanceCalculations";
 import type { Balance } from "../types/sourceBalanceTypes";
+import { NumericInput } from "../components/NumericInput";
 
 interface MineshaftsViewProps {
   balance: Balance;
@@ -150,16 +151,12 @@ function MineshaftRow({
       </td>
       <td className="gng-level-cell-td">
         <div className="gng-level-cell">
-          <input
+          <NumericInput
             className="form-control form-control-sm"
             min={0}
-            type="number"
             value={mineshaft.level}
-            onChange={(event) =>
-              onGeneratorLevelChange(
-                mineshaft.id,
-                Math.max(0, Number(event.target.value)),
-              )
+            onValueChange={(value) =>
+              onGeneratorLevelChange(mineshaft.id, value)
             }
           />
         </div>
@@ -176,19 +173,15 @@ function MineshaftRow({
                 ? ` Auto at ${manager.automationLevel}`
                 : ""}
             </span>
-            <input
+            <NumericInput
               className="form-control form-control-sm"
               max={manager.maxLevel}
               min={0}
-              type="number"
               value={manager.level}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 onCardLevelChange(
                   manager.card.Id,
-                  Math.max(
-                    0,
-                    Math.min(manager.maxLevel, Number(event.target.value)),
-                  ),
+                  Math.max(0, Math.min(manager.maxLevel, value)),
                 )
               }
             />

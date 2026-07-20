@@ -1,7 +1,8 @@
 import type { CardProjection, LocalizationLookup } from "../types/derivedTypes";
-import { STAT_MODIFIER_LOCALIZATION_KEYS } from "../game/modifiers";
+import { STAT_MODIFIER_LOCALIZATION_KEYS } from "../game/effectMetadata";
 import type { Rarity } from "../types/sourceBalanceTypes";
 import { StatModifierType } from "../types/sourceBalanceTypes";
+import { NumericInput } from "../components/NumericInput";
 
 export function CardsView({
   cards,
@@ -49,21 +50,17 @@ export function CardsView({
                 <td>{t(rarityKey(card.Rarity), String(card.Rarity))}</td>
                 <td className="gng-level-cell-td">
                   <div className="gng-level-cell">
-                    <input
+                    <NumericInput
                       className="form-control form-control-sm"
                       max={displayMaxLevel}
                       min={0}
-                      type="number"
                       value={displayLevel}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         onCardLevelChange(
                           card.Id,
                           displayToInternalLevel(
                             card.StatModifierType,
-                            clampLevel(
-                              Number(event.target.value),
-                              displayMaxLevel,
-                            ),
+                            clampLevel(value, displayMaxLevel),
                           ),
                         )
                       }

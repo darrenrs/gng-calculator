@@ -185,6 +185,19 @@ table.table {
   max-width: 6rem;
 }
 
+.gng-number-field {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.gng-number-field input {
+  width: 100%;
+}
+
+.gng-level-cell .gng-number-field {
+  max-width: 6rem;
+}
+
 .gng-number-input,
 .gng-level-cell input[type="number"],
 .gng-manager-input input[type="number"],
@@ -218,7 +231,8 @@ table.table {
   gap: 0.25rem;
 }
 
-.gng-inline-number input {
+.gng-inline-number input,
+.gng-inline-number .gng-number-field {
   max-width: 5rem;
 }
 

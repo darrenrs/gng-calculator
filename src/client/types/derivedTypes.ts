@@ -6,6 +6,7 @@ import type {
   RankMultiplier,
   Rock,
 } from "./sourceBalanceTypes";
+import type { GlobalEffectId } from "./effectTypes";
 
 export type LocalizationLookup = (key: string, fallback?: string) => string;
 
@@ -70,28 +71,6 @@ export type SummaryProjection = {
   rankMultiplierRows: RankMultiplierProjection[];
 };
 
-export type GlobalEffectId =
-  | "GoblinLimitChange"
-  | "GoblinPurchasePrice"
-  | "GoblinPurchaseLevelChange"
-  | "GoblinBaseDamage"
-  | "GoblinCannonTimerChange"
-  | "GeneratorCurrencyMult"
-  | "RockCurrencyMult"
-  | "DeliveryCurrencyMult"
-  | "ProdTimePercentDecrease"
-  | "CardsMult"
-  | "LteRewardsMult"
-  | "DeliveryDynamiteMult"
-  | "RockDoubleGemsPercentChance"
-  | "DynamiteBaseDamage"
-  | "RockLegendaryChestMult"
-  | "CrusherSpeedMult"
-  | "CrusherBombInterval"
-  | "GoblinKingDamageModifier";
-
-export type NamedGlobalEffects = Record<GlobalEffectId, number>;
-
 export type GlobalEffectProjection = {
   id: GlobalEffectId;
   label: string;
@@ -126,6 +105,8 @@ export type MapProjection = {
   checkpointCount: number;
   checkpointsOpened: number;
   maxGoblinCount: number;
+  isImportedSnapshot: boolean;
+  snapshotStale: boolean;
 };
 
 export type MapDisplayCell = {
@@ -142,6 +123,11 @@ export type MapDisplayCell = {
   gridColumnStart: number;
   hidden: boolean;
   covered: boolean;
+  checkpointId: number;
+  baseToken?: string;
+  tooltip?: string;
+  targetIndex?: number;
+  targetDirection?: "Up" | "Down" | "Left" | "Right" | "Overlapping";
 };
 
 export type MapParsedCell = MapDisplayCell & {
@@ -186,6 +172,10 @@ export type DeliveryProjection = {
   activeIncomePerSecond: number;
   claimCountResetSeconds: number;
   maxDupesResetSeconds: number;
+  claimCount: number;
+  nextDeliveryAt: Date | null;
+  claimCountResetsAt: Date | null;
+  duplicateCycleResetsAt: Date | null;
 };
 
 export type DeliveryRowProjection = {
@@ -197,6 +187,7 @@ export type DeliveryRowProjection = {
   oddsWeight: number;
   nextDeliveryPercent: number;
   unlocked: boolean;
+  eligibleForNext: boolean;
   count: number;
   total: number;
 };
@@ -208,6 +199,12 @@ export type GachaProjection = {
   gachaCardLevel: number;
   regularGachas: Gacha[];
   fixedGachas: Gacha[];
+  freeGachaIndex: number | null;
+  freeGachaAvailableAt: Date | null;
+};
+
+export type RocksProjection = {
+  rewardCycles: Array<{ id: string; index: number }>;
 };
 
 export type RockProjection = {

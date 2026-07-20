@@ -6,6 +6,10 @@ import type {
   MapProjection,
 } from "../types/derivedTypes";
 import type {
+  ImportedMapSnapshot,
+  ParsedGridCellSave,
+} from "../types/parsedSaveTypes";
+import type {
   Balance,
   MapSizedObject,
   Zone,
@@ -25,31 +29,55 @@ export function buildMapProjection(
   activeState: ActiveState,
   selectedZoneId = activeState.selectedZoneId,
   t?: (key: string, fallback?: string) => string,
+  options?: {
+    importedSnapshot?: ImportedMapSnapshot | null;
+    snapshotStale?: boolean;
+  },
 ): MapProjection {
   const zone =
     balance.Zones.find((item) => item.Id === selectedZoneId) ??
     balance.Zones[0];
+  if (
+    options?.importedSnapshot &&
+    options.importedSnapshot.balanceId === balance.Id
+  ) {
+    const snapshotBaseZone = balance.Zones.find(
+      (candidate) => candidate.Id === options.importedSnapshot?.zone.id,
+    );
+    return buildImportedMapProjection(
+      balance,
+      activeState,
+      snapshotBaseZone,
+      options.importedSnapshot,
+      Boolean(options.snapshotStale),
+      t,
+    );
+  }
   const cells = gridRows(zone).map((row, rowIndex) =>
     row.map((_token, colIndex) =>
       emptyMapDisplayCell(zone, rowIndex, colIndex),
     ),
   );
   const tokens = zone?.Grid.split(",") ?? [];
+  let currentCheckpointIndex = 0;
   tokens.forEach((token, index) => {
+    if (token.startsWith("p")) {
+      currentCheckpointIndex++;
+    }
+
     const placement = balanceIndexToCssGrid(index, MAP_COLUMNS, 1, 1);
     const cell = parseMapDisplayCell(
       balance,
-      activeState,
       zone,
       token,
       index,
       placement,
+      currentCheckpointIndex,
       t,
     );
     cells[cell.gridRowStart - 1][cell.gridColumnStart - 1] = cell;
   });
   applyCoveredCells(cells);
-  applyCheckpointProgress(cells, activeState.mapInput.checkpointsOpened);
 
   const progressionCells = cells
     .slice()
@@ -67,6 +95,8 @@ export function buildMapProjection(
     checkpointCount: zoneCheckpointCount(zone),
     checkpointsOpened: activeState.mapInput.checkpointsOpened,
     maxGoblinCount: maxGoblinCount(balance, activeState),
+    isImportedSnapshot: false,
+    snapshotStale: false,
   };
 }
 
@@ -189,16 +219,17 @@ function emptyMapDisplayCell(
     gridColumnStart: col + 1,
     hidden: false,
     covered: false,
+    checkpointId: -1,
   };
 }
 
 function parseMapDisplayCell(
   balance: Balance,
-  activeState: ActiveState,
   zone: Zone | undefined,
   token: string,
   index: number,
   placement: ReturnType<typeof balanceIndexToCssGrid>,
+  currentCheckpointIndex: number,
   t?: (key: string, fallback?: string) => string,
 ): MapDisplayCell {
   const parts = mapTokenParts(token);
@@ -214,6 +245,7 @@ function parseMapDisplayCell(
     gridColumnStart: placement.gridColumnStart,
     hidden: false,
     covered: false,
+    checkpointId: currentCheckpointIndex,
   };
 
   if (!token || token === ".") {
@@ -293,6 +325,243 @@ function parseMapDisplayCell(
     : { ...base, kind: "unknown", label: token };
 }
 
+function buildImportedMapProjection(
+  balance: Balance,
+  activeState: ActiveState,
+  baseZone: Zone | undefined,
+  snapshot: ImportedMapSnapshot,
+  snapshotStale: boolean,
+  t?: (key: string, fallback?: string) => string,
+): MapProjection {
+  const { zone } = snapshot;
+  const baseProjection = buildMapProjection(balance, activeState, zone.id, t);
+  const baseByCoordinate = new Map(
+    baseProjection.displayRows
+      .flat()
+      .map((cell) => [`${cell.row}:${cell.col}`, cell] as const),
+  );
+  const rows: MapDisplayCell[][] = Array.from(
+    { length: zone.depth },
+    (_row, rowIndex) =>
+      Array.from({ length: zone.width }, (_column, columnIndex) => {
+        const empty = emptyMapDisplayCell(undefined, rowIndex, columnIndex);
+        const base = baseByCoordinate.get(`${rowIndex}:${columnIndex}`);
+        return {
+          ...empty,
+          key: `${zone.id}-save-${rowIndex}-${columnIndex}`,
+          checkpointId: base?.checkpointId ?? -1,
+          baseToken: base?.token,
+        };
+      }),
+  );
+
+  for (const savedCell of zone.grid) {
+    if (!savedCell.key) continue;
+    const size = savedCellSize(balance, savedCell);
+    const row = zone.depth - savedCell.rowFromBottom - size.rowSpan;
+    const col = savedCell.column;
+    if (row < 0 || row >= zone.depth || col < 0 || col >= zone.width) {
+      continue;
+    }
+    const base = baseByCoordinate.get(`${row}:${col}`);
+    const target = savedTarget(balance, zone.grid, savedCell, zone.width);
+    rows[row][col] = savedMapDisplayCell(
+      balance,
+      savedCell,
+      row,
+      col,
+      size,
+      base?.checkpointId ?? -1,
+      base?.token,
+      target,
+      t,
+    );
+  }
+  applyCoveredCells(rows);
+
+  return {
+    zoneId: zone.id,
+    displayRows: rows,
+    progressionCells: rows
+      .slice()
+      .reverse()
+      .flatMap((row) => row)
+      .map((cell, index) => ({ ...cell, progressionIndex: index })),
+    rowCount: zone.depth,
+    columnCount: zone.width,
+    mineshaftIdsInZone: zoneMineshaftIds(baseZone),
+    checkpointCount: zoneCheckpointCount(baseZone),
+    checkpointsOpened: activeState.mapInput.checkpointsOpened,
+    maxGoblinCount: maxGoblinCount(balance, activeState),
+    isImportedSnapshot: true,
+    snapshotStale,
+  };
+}
+
+function savedMapDisplayCell(
+  balance: Balance,
+  cell: ParsedGridCellSave,
+  row: number,
+  col: number,
+  size: { rowSpan: number; colSpan: number },
+  checkpointId: number,
+  baseToken: string | undefined,
+  target: {
+    index: number;
+    direction: "Up" | "Down" | "Left" | "Right" | "Overlapping";
+  } | null,
+  t?: (key: string, fallback?: string) => string,
+): MapDisplayCell {
+  const kind = savedCellKind(cell.key ?? "");
+  const semanticId = cell.semanticId ?? "unknown";
+  let label = semanticId;
+  let detail: string | undefined;
+  if (kind === "obstruction") label = "";
+  if (kind === "rock") {
+    label = String(cell.level);
+    detail = undefined;
+  }
+  if (kind === "mineshaft") {
+    label =
+      t?.(`mineshaft.name.${semanticId}`, titleCase(semanticId)) ??
+      titleCase(semanticId);
+    detail = cell.state > 0 ? String(cell.level) : undefined;
+  }
+  if (kind === "spawningCart") {
+    label = "Forge";
+    detail = String(cell.level);
+  }
+  if (kind === "checkpoint") label = "Checkpoint";
+  if (kind === "exit") label = "Exit";
+  if (kind === "barrelGoblin") label = "Goblin Barrel";
+  if (kind === "barrelDelivery") label = "Delivery Barrel";
+  if (kind === "dynamite") {
+    label = "Dynamite";
+    detail = String(cell.level);
+  }
+  if (kind === "goblin") label = `Goblin ${cell.level}`;
+  if (kind === "reward") label = titleCase(semanticId);
+  if (kind === "goblinKing") label = "Goblin King";
+
+  return {
+    key: `saved-${cell.index}`,
+    row,
+    col,
+    token: `${cell.key}:${semanticId}`,
+    kind,
+    label,
+    detail,
+    rowSpan: size.rowSpan,
+    colSpan: size.colSpan,
+    gridRowStart: row + 1,
+    gridColumnStart: col + 1,
+    hidden: false,
+    covered: false,
+    checkpointId,
+    baseToken,
+    ...(target
+      ? { targetIndex: target.index, targetDirection: target.direction }
+      : {}),
+    tooltip: [
+      `${cell.key}:${semanticId}`,
+      `(Col ${cell.column + 1}, Row from bottom ${cell.rowFromBottom + 1})`,
+      `Base cell: ${baseToken || "empty"}`,
+      ...(cell.powerRemaining !== null
+        ? [
+            `Power remaining: ${cell.powerRemaining}${cell.interactionValue === null ? " (full power)" : ""}`,
+          ]
+        : []),
+      ...(target ? [`Target index ${target.index}: ${target.direction}`] : []),
+      JSON.stringify(cell.raw, null, 2),
+    ].join("\n"),
+  };
+}
+
+function savedTarget(
+  balance: Balance,
+  grid: ParsedGridCellSave[],
+  cell: ParsedGridCellSave,
+  width: number,
+): {
+  index: number;
+  direction: "Up" | "Down" | "Left" | "Right" | "Overlapping";
+} | null {
+  if (
+    cell.key !== "m" ||
+    cell.secondaryLevel === null ||
+    cell.tertiaryLevel === null ||
+    cell.secondaryLevel < 0 ||
+    cell.tertiaryLevel < 0
+  ) {
+    return null;
+  }
+  const targetIndex = cell.tertiaryLevel * width + cell.secondaryLevel;
+  const target = grid[targetIndex];
+  if (!target) return null;
+  const size = savedCellSize(balance, target);
+  const targetLeft = target.column;
+  const targetRight = target.column + size.colSpan - 1;
+  const targetBottom = target.rowFromBottom;
+  const targetTop = target.rowFromBottom + size.rowSpan - 1;
+  let direction: "Up" | "Down" | "Left" | "Right" | "Overlapping" =
+    "Overlapping";
+  if (cell.column < targetLeft) direction = "Right";
+  else if (cell.column > targetRight) direction = "Left";
+  else if (cell.rowFromBottom < targetBottom) direction = "Up";
+  else if (cell.rowFromBottom > targetTop) direction = "Down";
+  return { index: targetIndex, direction };
+}
+
+function savedCellKind(key: string): MapCellKind {
+  const kinds: Record<string, MapCellKind> = {
+    b: "barrelGoblin",
+    c: "spawningCart",
+    d: "barrelDelivery",
+    e: "exit",
+    l: "dynamite",
+    m: "goblin",
+    p: "checkpoint",
+    r: "rock",
+    s: "mineshaft",
+    w: "reward",
+    x: "obstruction",
+    y: "goblinKing",
+  };
+  return kinds[key] ?? "unknown";
+}
+
+function savedCellSize(
+  balance: Balance,
+  cell: ParsedGridCellSave,
+): { rowSpan: number; colSpan: number } {
+  const id = cell.semanticId ?? "";
+  if (cell.key === "x") {
+    const source = balance.Obstructions.find((item) => item.Id === id);
+    return {
+      rowSpan: source?.DepthCells ?? 1,
+      colSpan: source?.WidthCells ?? 1,
+    };
+  }
+  if (cell.key === "r") {
+    const source = balance.Rocks.find((item) => item.Id === id);
+    return {
+      rowSpan: source?.DepthCells ?? 1,
+      colSpan: source?.WidthCells ?? 1,
+    };
+  }
+  if (cell.key === "s") {
+    const source = balance.MineShafts.find((item) => item.Id === id);
+    return {
+      rowSpan: source?.DepthCells ?? 3,
+      colSpan: source?.WidthCells ?? 2,
+    };
+  }
+  if (cell.key === "c") return STATIC_MAP_SIZES[FORGE_ID];
+  if (cell.key === "p") return STATIC_MAP_SIZES.checkpoint;
+  if (cell.key === "e") return STATIC_MAP_SIZES.exit;
+  return { rowSpan: 1, colSpan: 1 };
+}
+
 function placedCell(
   base: Omit<MapDisplayCell, "kind" | "label">,
   kind: MapCellKind,
@@ -348,21 +617,6 @@ function applyCoveredCells(rows: MapDisplayCell[][]): void {
       }
     }
   }
-}
-
-function applyCheckpointProgress(
-  rows: MapDisplayCell[][],
-  checkpointsOpened: number,
-): void {
-  if (checkpointsOpened <= 0) return;
-  rows
-    .slice()
-    .reverse()
-    .flatMap((row) => row)
-    .filter((cell) => cell.kind === "checkpoint")
-    .forEach((cell, index) => {
-      if (index < checkpointsOpened) cell.hidden = true;
-    });
 }
 
 function placementFromSource(

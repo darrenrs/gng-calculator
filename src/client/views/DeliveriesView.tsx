@@ -8,6 +8,27 @@ export function DeliveriesView({
 }) {
   return (
     <div className="p-3 table-responsive gng-scroll-pane">
+      <div className="mb-3">
+        <strong>Current claim count:</strong> {projection.claimCount}
+        {projection.nextDeliveryAt && (
+          <div>
+            <strong>Next delivery:</strong>{" "}
+            {projection.nextDeliveryAt.toLocaleString()}
+          </div>
+        )}
+        {projection.claimCountResetsAt && (
+          <div>
+            <strong>Claim count resets:</strong>{" "}
+            {projection.claimCountResetsAt.toLocaleString()}
+          </div>
+        )}
+        {projection.duplicateCycleResetsAt && (
+          <div>
+            <strong>Duplicate counts reset:</strong>{" "}
+            {projection.duplicateCycleResetsAt.toLocaleString()}
+          </div>
+        )}
+      </div>
       <table className="table table-striped table-sm">
         <thead>
           <tr>

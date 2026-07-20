@@ -87,3 +87,39 @@ export function timeFormat(s: number, zeroMeansBase: boolean = false): string {
 export function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
+
+const DOTNET_UNIX_EPOCH_TICKS = 621355968000000000n;
+const TICKS_PER_MILLISECOND = 10000n;
+
+export function dateFromDotNetTicks(value: string | number): Date {
+  const ticks = int64ToBigInt(value);
+  const milliseconds =
+    (ticks - DOTNET_UNIX_EPOCH_TICKS) / TICKS_PER_MILLISECOND;
+  const date = new Date(Number(milliseconds));
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid .NET tick value: ${String(value)}`);
+  }
+  return date;
+}
+
+export function dateFromUnixSeconds(value: string | number): Date {
+  const seconds = Number(value);
+  const date = new Date(seconds * 1000);
+  if (!Number.isFinite(seconds) || Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid Unix timestamp: ${String(value)}`);
+  }
+  return date;
+}
+
+function int64ToBigInt(value: string | number): bigint {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || !Number.isInteger(value)) {
+      throw new Error(`Invalid 64-bit integer: ${String(value)}`);
+    }
+    return BigInt(value);
+  }
+  if (!/^-?\d+$/.test(value)) {
+    throw new Error(`Invalid 64-bit integer: ${value}`);
+  }
+  return BigInt(value);
+}
